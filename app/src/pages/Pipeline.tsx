@@ -32,7 +32,7 @@ export function Pipeline() {
     <div className="page-inner">
       <div className="page-head">
         <h1>Pipeline</h1>
-        <p className="lede">Five steps on Supabase, then a daily brief. The scheduled jobs are small edge functions that pg_cron calls; each does one bounded batch and exits, so it fits the free tier's limits and picks up where the last run stopped. Drafting is paced to a few accounts every ten minutes to stay inside the free model quota.</p>
+        <p className="lede">Five steps on Supabase, then a daily brief. The scheduled jobs are small edge functions that pg_cron calls; each does one bounded batch and exits, so it fits the free tier's limits and picks up where the last run stopped. On this demo, drafting covers the customers and the top of the prospect list and is then paused, so the free model quota is left for the live Read page.</p>
       </div>
 
       <div className="flow" aria-label="Pipeline stages">

@@ -1,6 +1,7 @@
-import type { Desk, Evidence, Product, SignalType, Source, Tool } from "../types";
+import type { Desk, Evidence, Product, Review, SignalType, Source, Tool } from "../types";
 
 export const API_BASE: string = import.meta.env.VITE_API_BASE ?? "https://bxtfkbifeirwebfytpax.supabase.co/functions/v1/api";
+export const AGENT_BASE: string = import.meta.env.VITE_AGENT_BASE ?? API_BASE.replace(/\/api$/, "/agent");
 export const LIVE_APP_URL: string = import.meta.env.VITE_LIVE_URL ?? "https://devmun12.github.io/alpha-desk/";
 
 async function fetchJson<T>(url: string, ms: number): Promise<T> {
@@ -60,8 +61,25 @@ export interface AnalyzeResult {
   play: null | { playKey: string; persona: string; why_now: string; subject: string; email: string; linkedin: string; call_opener: string; quote_used: string; checks: { passed: boolean; issues: string[]; words: number }; model: string };
 }
 
+export interface ComposeResult {
+  playKey: string; persona: string; why_now: string; subject: string; email: string; linkedin: string; call_opener: string; quote_used: string;
+  checks: { passed: boolean; issues: string[]; words: number }; review: Review | null; model: string;
+}
+
+/** Step 2 of a live read: draft the play, then run the buyer panel and the rewrite loop. */
+export async function compose(x: Extraction, body: { title: string; company: string; text: string }): Promise<ComposeResult> {
+  const res = await fetch(`${AGENT_BASE}/compose`, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ...body, summary: x.summary, quotes: x.evidence.map((e) => e.quote), tools: x.current_tools.map((t) => t.name), signalTypes: x.signal_types }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? `Request failed (${res.status})`);
+  return data as ComposeResult;
+}
+
+/** Step 1 of a live read: the screen, the extraction and the word-for-word quote check. */
 export async function analyze(body: { title: string; company: string; text: string }): Promise<AnalyzeResult> {
-  const res = await fetch(`${API_BASE}/analyze`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const res = await fetch(`${API_BASE}/analyze`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...body, draft: false }) });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error ?? `Request failed (${res.status})`);
   return data as AnalyzeResult;

@@ -14,6 +14,7 @@ What was built, in order, with what broke and what was thrown away. Times are UT
 | 18:49 to 19:02 | Drafting failed on every run (see "The draft job that never finished"). Schedule paused at 19:02. |
 | 19:11 | Agent function deployed. First three drafts written and reviewed by 19:13. |
 | 19:18 | Buyer panel reworked from yes/no to a 1 to 5 score (see "A panel that said no to everything"). |
+| 19:25 | Live read split into two visible steps: read and verify, then draft, panel and rewrite. |
 
 ## Things that broke
 
@@ -30,6 +31,8 @@ What was built, in order, with what broke and what was thrown away. Times are UT
 **The fallback that was never there.** The app falls back to a saved snapshot when the API is unreachable. The deploy workflow wrote that snapshot to `app/public/`, a folder that did not exist, so the step failed quietly and the live site had no snapshot. One `mkdir -p`.
 
 **Anyone could edit the demo.** The public event endpoint updated play status and could overwrite draft text for every visitor. Events are still logged, but they no longer change shared rows; each visitor's actions are applied in their own browser.
+
+**Flash did not answer.** The error trail showed why drafting had hung: on the free tier that evening `gemini-3.8-flash` returned 503 and then, like `gemini-3.7-flash`, gave no answer inside 25 seconds, and `gemini-3.5-flash-lite` was out of quota. Only `gemini-3.1-flash-lite` answered. Drafts in this demo were therefore written by Flash-Lite, the same model family that runs the panel, so the "different model grades it" property does not hold here. The code prefers Flash for writing whenever Flash answers.
 
 ## AI output that was rejected
 

@@ -192,7 +192,7 @@ const DECISION: Record<Review["decision"], string> = {
 };
 
 /** What the simulated buyers said, round by round, and what the loop decided. */
-function ReviewTrace({ review, edited }: { review: Review; edited: boolean }) {
+export function ReviewTrace({ review, edited }: { review: Review; edited: boolean }) {
   if (!review.decision) return null; // an older review format: nothing reliable to show
   const improved = review.shipped === 1 && review.mean > review.firstMean;
   return (
