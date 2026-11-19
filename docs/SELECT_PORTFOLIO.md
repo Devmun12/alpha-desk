@@ -4,20 +4,6 @@ Some of the things I have built and shipped. Each one is live, opens without a l
 
 Short link to this page: https://bit.ly/devesh_pf
 
-## Alpha Desk
-
-Live: https://devmun12.github.io/alpha-desk/ · Code: https://github.com/Devmun12/alpha-desk
-
-Turns public job postings into a short daily list of accounts for a revenue team, with the evidence and a draft email for each.
-
-- Reads real job postings and keeps only the ones that signal a buying moment. Rules discard about 97% before a model runs.
-- A daily brief ranks five accounts and says why. Rules build the shortlist, a model orders it, and code rejects any reason that states something untrue.
-- Every draft goes through a review panel of three simulated buyers and an editor. The rewrite ships only if it passes the code checks and scores higher.
-- Existing customers are routed to their account owner as an expansion conversation, never a cold email.
-- 20% of accounts are held out as a control group, and every outreach angle has a retirement rule.
-
-Built with React, Supabase (Postgres, scheduled jobs, edge functions) and Gemini.
-
 ## Settlement Review Kit
 
 Live: https://devmun12.github.io/Razorpay_SettlementReviewKit/ · Code: https://github.com/Devmun12/Razorpay_SettlementReviewKit
@@ -30,6 +16,19 @@ A concept prototype for the Razorpay x ISB AI PM Build Challenge. When a merchan
 - Nothing is uploaded. All reading happens in the browser, and all data is synthetic.
 
 Built as a static page with pdf.js. Not a Razorpay product.
+
+## Jedis Awards
+
+Live: https://devmun12.github.io/JedisAwards/ (can login with 67534 student) · Code: https://github.com/Devmun12/JedisAwards
+
+Live award voting for section awards. Phones vote, an admin runs each award, and a big screen reveals the winner. Developed with contingencies in mind for an awards night)
+
+- Three connected views: a phone voting app, an admin panel and a projector screen, kept in sync in real time.
+- The admin controls the awards, the people and the results from one panel. (Link - https://devmun12.github.io/JedisAwards/admin.html, password - jed1s_@@g__ha1)
+- Rehearsed with a load test of 80 simulated phones before the night.
+- Libraries are bundled with the site, so nothing depends on a third-party CDN during the event.
+
+Built as a static site on GitHub Pages with Supabase for the database and live updates.
 
 ## Roster Exchange
 
@@ -44,15 +43,16 @@ A concept prototype for a healthcare product case study. A provider group update
 
 Built in plain JavaScript on a synthetic dataset of 150 clinicians and 48 roster changes, with a Playwright test of the main flow.
 
-## Jedis Awards
+## Baari (DB and AI activities paused)
 
-Live: https://devmun12.github.io/JedisAwards/ · Code: https://github.com/Devmun12/JedisAwards
+Live: https://baari-site.vercel.app · Code: https://github.com/Devmun12/baari-site
 
-Live award voting for a class of 69. Phones vote, an admin runs each award, and a big screen reveals the winner.
+A product concept for families who share the care of an ageing parent from different cities, with a landing page and one AI feature. Baari means "turn" in Hindi. The database and AI calls are paused, so the page loads but the demo will not generate a plan.
 
-- Three connected views: a phone voting app, an admin panel and a projector screen, kept in sync in real time.
-- The admin controls the awards, the people and the results from one panel.
-- Rehearsed with a load test of 80 simulated phones before the night.
-- Libraries are bundled with the site, so nothing depends on a third-party CDN during the event.
+- Forward a message, a Hindi or English voice note or a bill photo, and it becomes a task with a date and an owner. Slipped tasks pass to the next sibling.
+- "Set up the week" takes a parent's week and returns a 7-day care plan split fairly between two family members.
+- It never gives medical advice. A health question becomes an "Ask the doctor" task for the parent's own doctor.
+- The server checks every form answer and the model's plan, and limits each visitor to three plans. The free-text note is never stored.
+- Live tests caught the model inventing tasks and assigning the wrong owner, and both are documented.
 
-Built as a static site on GitHub Pages with Supabase for the database and live updates.
+Built as a single static page on Vercel, with serverless functions, Gemini for the plan and Supabase for storage.
