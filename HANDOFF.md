@@ -1,6 +1,21 @@
 # Alpha Desk handoff
 
-This file is for an AI assistant (or a person) taking over this project mid-flight. Read it top to bottom before you change anything. Status figures are from **2026-11-19 18:34 UTC**.
+This file is for an AI assistant (or a person) taking over this project mid-flight. Read it top to bottom before you change anything. Status figures are from **2026-11-19 18:37 UTC** (Nov 20, 00:07 in India), so refresh them before you rely on them (§7).
+
+---
+
+## 0. Start here
+
+**What you can and can't reach.** You probably can't reach Supabase, GitHub Actions or the live site yourself. Devesh does those steps. Work with him like this:
+- Give him one step at a time: the exact command or SQL, where to run it, and what a good result looks like.
+- Ask him to paste the output back before you move on.
+- He is technical (BTech Computer Engineering, ran IT programs at DHL). He wants a short explanation and the next step, not a lecture.
+- His messages are often voice-typed, so read past filler words.
+
+**Your first 15 minutes:**
+1. Get the repo. Either Devesh uploads a zip of `github.com/Devmun12/alpha-desk`, or you read it through a GitHub connector. Read `README.md`, this file, `supabase/functions/_shared/plays.ts` and `extract.ts`.
+2. Ask Devesh to run the "progress" and "last runs" queries in §7 in the Supabase SQL editor, and to open the live app. Note that the SQL editor shows only the last statement's result, so run queries one at a time.
+3. Ask him the open questions in §10 before you write the application note.
 
 ---
 
@@ -202,18 +217,53 @@ Never print these.
 - **Functions:** `get_desk`, `log_event` (rate-limited to 600/h), `extract_queue(p_version, p_limit)`, `screen_ok`, `screen_priority`, `pipeline_secret_ok`, `acquire_lease`, `release_lease`, `ops.invoke`.
 - RLS is on with no policies: anon can't read tables, and everything public goes through the `api` function using the service role.
 
-### Pipeline numbers at 18:34 UTC
+### Pipeline numbers at 18:37 UTC
 
 | Metric | Value |
 |---|---|
 | Accounts | 296 (212 with a readable board) |
 | Open postings | 17,798 |
 | Candidates | 583 by prefilter; about 359 eligible after screen v2 |
-| `extract.v2` reads | 77, of which 76 relevant |
-| v2 queue | 282 left, draining at about **20/min** since the redeploy (run 90: 30 read in 90s, 0 errors; was about 6.5/min) |
-| Scored accounts | 63, of which 56 have score ≥35 (drafting candidates) |
-| Plays | 0, because drafting waits for the extraction queue to empty. Expect it to start around 18:50 UTC and to draft about 45 accounts (56 minus the ~20% holdout) over ~10 minutes. |
+| `extract.v2` reads | 165, of which 148 relevant (90%) |
+| v2 queue | 194 left, draining at about **20/min** since the redeploy (run 90: 30 read in 90s, 0 errors; was about 6.5/min) |
+| Scored accounts | 80: tier A 29, B 26, C 25 |
+| Plays | 0, because drafting waits for the extraction queue to empty. Expect it to start around 18:50 UTC and draft about 50–60 accounts (score ≥35, minus the ~20% holdout) over 10–15 minutes. |
 | Older rows | `extract.v1` rows (88 read) are superseded by v2 in `v_signals`. They stay in the table, so don't delete them. |
+
+### Scoring weights (tables `signal_weights` and `role_weights`, editable without a deploy)
+
+| Signal | Points | Play |
+|---|---|---|
+| spreadsheet_comp | 30 | retire-the-spreadsheet |
+| cpq_legacy | 24 | cpq-end-of-sale |
+| icm_greenfield | 24 | retire-the-spreadsheet |
+| new_revops_leader | 20 | new-leader-90 |
+| icm_incumbent | 20 | incumbent-swap |
+| cpq_pain | 14 | deal-desk-load |
+| planning_buildout | 14 | capacity-build |
+| comp_redesign | 14 | retire-the-spreadsheet |
+| audit_controls | 10 | retire-the-spreadsheet |
+| scale_up | 8 | capacity-build |
+
+Role multipliers:
+- 1.0: commissions_admin, sales_comp_strategy, revops_leader
+- 0.9: deal_desk, sales_planning
+- 0.8: revops_ic, finance_accounting
+- 0.6: gtm_systems
+- 0.5: bizops
+- 0.4: other
+
+### API contract
+
+The full response shape is in `app/src/types.ts`. The top-level keys are `generatedAt, stats, accounts, signals, rejected, plays, events, runs, coverage, weights, roleWeights`.
+
+| Route | Request | Response |
+|---|---|---|
+| `GET /api/desk` | none | the Desk JSON (cached for 60s) |
+| `GET /api/health` | none | `{ llm: { configured, models[] }, at }` |
+| `POST /api/event` | `{ type, accountId, playId?, signalId?, payload?, actor? }`. `type` is one of: surfaced, viewed, approved, edited, sent, dismissed, signal_up, signal_down, replied, meeting, opportunity | `{ id }` |
+| `POST /api/analyze` | `{ title, company?, text (≥200 chars), draft?: boolean }` | `{ prefilter, extraction, model, latencyMs, inputTokens, outputTokens, play }` (40 per hour across all users) |
+| `POST /api/ingest`, `/api/extract`, `/api/draft` | internal | need the `x-pipeline-secret` header; return 401 otherwise |
 
 ---
 
@@ -296,7 +346,7 @@ where p.status = 'draft' order by p.id desc limit 10;
 
 ### P1: quality before anyone sees it
 
-3. **Extraction precision looks suspiciously high.** v2 marked 76 of 77 postings relevant. Either screen v2 is doing the precision work, or the model is too lenient.
+3. **Measure extraction precision; don't trust the model's own rate.** v2 marked 148 of 165 postings relevant (90%). Either screen v2 is doing the precision work, or the model is too lenient.
    - Sample about 30 relevant signals with the query above and judge each one: would a seller act on it?
    - If there are clear false positives (generic RevOps IC roles, pay boilerplate, the vendor's own postings), tighten the prompt rules or add label guards. Then bump `EXTRACT_VERSION` to `extract.v3` and let the queue re-read. Don't delete v2.
    - Record the measured precision; it's a strong line for the note.
@@ -354,3 +404,57 @@ where p.status = 'draft' order by p.id desc limit 10;
 - **Snapshot fallback:** the app falls back to a snapshot when the API is unreachable. Use `?source=snapshot` to test that path.
 - **Rep actions:** these are stored as optimistic local events (localStorage) and also posted to `/api/event`. HubSpot and Slack are previews only; nothing is sent externally.
 - **CRM status:** `accounts.crm_status` is `prospect` for everyone (no customer data), so the Customers view and the expand-account play stay empty until a CRM is connected. That's intentional.
+- **Supabase free projects pause after about a week of low activity.** The 6-hourly workflow calls the API, which should count as activity. If the app shows the snapshot banner, check the Supabase dashboard for a paused project and click Restore. **Check this the day before any interview.**
+- **`/api/analyze` spends Devesh's Gemini quota.** It is capped at 40 calls an hour across all users. If reviewers hammer it, they'll get a clear 429 message.
+- **"Help Wanted" was the old working name.** You may see `hw-*` in old, unscheduled cron jobs and in the old edge functions. Ignore them; the product is Alpha Desk.
+- **Pages deploy delay:** a deploy takes 1–2 minutes after a push, and browsers cache aggressively, so hard-refresh before you judge a change.
+
+---
+
+## 10. Questions for Devesh (ask before writing the note)
+
+1. What's the application deadline?
+2. How is the note submitted (form field, PDF, email), and is there a length limit?
+3. His voice: anything he wants included, such as the Gen AI adoption and Copilot rollouts at DHL, ISB, or why this role?
+4. Is it OK to delete the four unused edge functions (`ingest`, `extract`, `draft`, `health`)?
+5. Should the repo stay public? It is now, and the README links the live app.
+6. Does he want a 2–3 minute screen-recorded walkthrough to attach? He would record it; you'd write the script (§12).
+
+---
+
+## 11. Decisions already made (don't reopen without a reason)
+
+- **Job posts as the signal.** They are public, specific, dated and written by the company itself, and each one can be quoted. They also map to the JD's "find alphas" and its "Buying-interest alerts" example.
+- **The name "Alpha Desk."** It comes from the JD's word "alphas". Devesh picked it from six options.
+- **Gemini for the model.** Devesh supplied the key, and the free tier covers the volume. The exact model is discovered at runtime.
+- **Supabase** puts Postgres, cron, edge functions and Vault in one free project. Scoring lives in SQL so it is transparent and editable.
+- **GitHub Pages** is free static hosting. The snapshot fallback means the demo works even if the API is down.
+- **Verify, don't trust.** Quotes are verified verbatim, quote labels are guarded, and drafts are checked automatically. That is the core credibility story.
+- **Holdout from day one,** because the JD says to judge work by whether it changed the business.
+- **A generic product** was Devesh's explicit call. Only the note is Everstage-specific.
+
+---
+
+## 12. Interview prep (step 3 is walking GP and a GTM engineer through the build)
+
+**Suggested 5-minute demo path:**
+1. Desk: open an A-tier account.
+2. Show the posting with the verified quotes highlighted. This is the hero moment, so pause on it.
+3. Play panel: why this play, the draft, and the checks it passed.
+4. Approve, then show the HubSpot payload and the Slack preview.
+5. Impact: the holdout, the sample-size maths and the kill rules.
+6. Pipeline: the funnel numbers and the run log.
+7. Read: paste a posting live. Keep a backup posting ready in case of the rate limit.
+
+**Likely questions, with honest answers to refine:**
+
+| Question | Answer |
+|---|---|
+| Is reading job boards OK? | It uses the public posting APIs that Greenhouse, Lever and Ashby publish for career sites. It is read-only, identifies itself in its user agent, and reads each board about once a day. It stores no personal data; a "persona" is a job title, not a person. |
+| How accurate is it? | Code checks every quote verbatim, so the evidence can't be invented. Whether a label is right is measured on a hand-checked sample; fill in the number from P1 #3. |
+| What does it cost? | It runs on free tiers. Token counts per run are in `runs.stats` and on the Pipeline page. Don't quote a dollar figure unless you've computed it. |
+| How would you know it works? | The account-level 20% holdout: compare reply and meeting rates for treatment against holdout, with a kill rule per play. No outreach has been sent, so there are no results yet. Say that plainly. |
+| How does it fit our stack? | The HubSpot payload (`ad_*` properties) and Slack Block Kit previews exist. Next steps are real writeback, contact enrichment for named people, and customer flags from the CRM. |
+| Why not intent-data vendors? | Job posts are first-party, specific and citeable, and they name the tools a company runs. They complement intent data rather than replace it. |
+| What breaks at scale? | Free-tier CPU limits and model quotas, plus board slugs that change. The fix is to move ingest to a queue or worker and pay for model capacity. |
+| What was hard? | The BUILD_LOG items in §8 #6. |
