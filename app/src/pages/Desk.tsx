@@ -183,7 +183,7 @@ function Dossier({ account: a, signals, events }: { account: Account; signals: R
       {(play?.whyNow || signals[0]) && <p className="why">{play?.whyNow || signals[0].summary}</p>}
       {a.crmStatus === "customer" && (
         <div className="callout customer">
-          <b>Existing customer, not a cold prospect.</b> {crmSource ?? "Marked as a customer in the CRM."} This account is out of the outbound queue and out of the experiment; it goes to the account owner as an expansion signal.
+          <b>Existing customer, not a cold prospect.</b> {(crmSource ?? "Marked as a customer in the CRM").replace(/\.$/, "")}. This account is out of the outbound queue and out of the experiment; it goes to the account owner as an expansion signal.
         </div>
       )}
 
