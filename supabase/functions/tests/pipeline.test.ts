@@ -123,3 +123,18 @@ Deno.test("model order: quality tries Flash first and keeps Flash-Lite as a net"
   assertEquals(modelOrder(all, "quality"), ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]);
   assertEquals(modelOrder(all, "fast")[0], "gemini-3.5-flash-lite");
 });
+
+Deno.test("a draft may repeat a number from the play's own ask", () => {
+  const play = PLAY_BY_KEY["cpq-end-of-sale"];
+  const input = { company: "Acme", category: null, crmStatus: "prospect", openRoles: 0, salesRoles: 0, signals: [{ title: "Deal Desk Manager", postedAt: null, summary: "Runs Salesforce CPQ.", quotes: ["administer Salesforce CPQ for the sales team"], tools: ["Salesforce CPQ"] }] };
+  const email = "Hi {{first_name}}, I saw the Deal Desk Manager opening. " + "Since the team is scoping what comes after the current quoting tool, it seemed worth a short conversation before that work is fixed. ".repeat(2) + "Would 20 minutes next week help? {{sender_name}}";
+  const d = { persona: "x", why_now: "x", subject: "your deal desk opening", email, linkedin: "x", call_opener: "x", quote_used: "" };
+  assertEquals(checkDraft(d, input, play).issues, []);
+  assert(checkDraft({ ...d, email: email.replace("20 minutes", "45 minutes") }, input, play).issues.some((i) => i.includes("45")));
+});
+
+Deno.test("brief: a reason that claims the wrong state falls back to the rule's reason", () => {
+  const cs = [cand(1), cand(2), cand(3)];
+  const r = acceptModelBrief(cs, { items: [{ account_id: 1, why: "This approved draft is ready to go." }, { account_id: 2, why: "Fresh posting." }, { account_id: 3, why: "Fresh too." }] }, 5);
+  assert(r.ok && !r.items[0].why.includes("approved"));
+});

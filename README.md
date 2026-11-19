@@ -75,7 +75,7 @@ docs/BUILD_LOG.md                 what broke, what was rejected, what is not don
 
 ## Tests
 
-- `deno test supabase/functions/tests` (14 tests) covers the screen, the quote verifier, the draft checks, the rule for which draft version ships, the brief's guardrails and model fallback order.
+- `deno test supabase/functions/tests` (16 tests) covers the screen, the quote verifier, the draft checks, the rule for which draft version ships, the brief's guardrails and model fallback order.
 - `cd app && npx tsc` type-checks the app; `node dev/shot.mjs` renders every page at desktop and phone widths for review.
 
 ## Limits

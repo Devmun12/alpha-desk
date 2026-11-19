@@ -15,6 +15,7 @@ What was built, in order, with what broke and what was thrown away. Times are UT
 | 19:11 | Agent function deployed. First three drafts written and reviewed by 19:13. |
 | 19:18 | Buyer panel reworked from yes/no to a 1 to 5 score (see "A panel that said no to everything"). |
 | 19:25 | Live read split into two visible steps: read and verify, then draft, panel and rewrite. |
+| 19:33 | First daily brief written. Number check and brief guard fixed after the first live read and the first brief showed them wrong. |
 
 ## Things that broke
 
@@ -33,6 +34,10 @@ What was built, in order, with what broke and what was thrown away. Times are UT
 **Anyone could edit the demo.** The public event endpoint updated play status and could overwrite draft text for every visitor. Events are still logged, but they no longer change shared rows; each visitor's actions are applied in their own browser.
 
 **Flash did not answer.** The error trail showed why drafting had hung: on the free tier that evening `gemini-3.8-flash` returned 503 and then, like `gemini-3.7-flash`, gave no answer inside 25 seconds, and `gemini-3.5-flash-lite` was out of quota. Only `gemini-3.1-flash-lite` answered. Drafts in this demo were therefore written by Flash-Lite, the same model family that runs the panel, so the "different model grades it" property does not hold here. The code prefers Flash for writing whenever Flash answers.
+
+**A check that flagged the play's own words.** The first live read of the example posting came back flagged: "number not in approved material: 20". The draft had said "20 minutes", which is what the play's call to action tells it to ask for. The number check compared against the approved claims and the posting but not against the play's own ask, so four of the first twelve drafts were flagged for following instructions, and their rewrites were thrown away for the same reason. The play's ask and angle now count as approved material, and the five affected drafts were regenerated.
+
+**A brief that called a draft "approved".** The first daily brief ranked well but described a draft awaiting review as "an approved draft". The number guard did not catch it because it was a wrong word, not a wrong number. A reason that claims a state the account is not in now falls back to the rule-written reason.
 
 ## AI output that was rejected
 

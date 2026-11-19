@@ -60,7 +60,9 @@ export function acceptModelBrief(cands: Candidate[], out: { headline?: string; i
     seen.add(c.accountId);
     const facts = `${c.score} ${c.daysSincePost ?? ""} ${c.panel ?? ""} ${c.postTitle ?? ""} ${c.quote ?? ""} ${c.name}`;
     const nums = String(it.why ?? "").match(/\d+/g) ?? [];
-    const why = nums.every((n) => facts.includes(n)) && it.why?.trim() ? String(it.why).trim().slice(0, 220) : ruleWhy(c); // invented number: fall back to the rule's reason
+    // A reason may not claim a state the account is not in ("approved", "sent") or a number that is not in its facts.
+    const wrongState = (/\bapproved\b/i.test(it.why ?? "") && c.action !== "send_approved") || (/\b(sent|replied)\b/i.test(it.why ?? "") && c.action !== "follow_up");
+    const why = !wrongState && nums.every((n) => facts.includes(n)) && it.why?.trim() ? String(it.why).trim().slice(0, 220) : ruleWhy(c); // invented number: fall back to the rule's reason
     items.push({ c, why });
     if (items.length >= max) break;
   }

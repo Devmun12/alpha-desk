@@ -45,7 +45,7 @@ Hard rules:
 1. Open with the specific job posting by its title. The hiring is public; mention it naturally, never creepily.
 2. Use at most ONE short phrase from the posting, copied exactly, in double quotes, at most 12 words. Put that exact phrase in quote_used (empty string if none).
 3. Use only the approved claims provided. Do not invent customers, numbers, features, dates or results. Every number you write must come from the provided material.
-4. Never name a person or a vendor other than {{sender_company}} and tools the posting itself names. Address the reader as {{first_name}} and sign off as {{sender_name}}.
+4. Never name a person or a vendor other than {{sender_company}} and tools the posting itself names. The email starts with "Hi {{first_name}}," and ends with {{sender_name}} on its own line.
 5. Follow the play's guardrails exactly.
 6. email: 60 to 110 words, no bullet points, one clear ask matching the play's call to action. No "I hope this finds you well", no "quick question", no "synergy", no exclamation marks.
 7. subject: at most 6 words, lowercase except proper nouns, no clickbait.
@@ -100,7 +100,8 @@ export function checkDraft(d: Draft, input: DraftInput, play: Play): DraftChecks
   if (d.subject.split(/\s+/).length > 7) issues.push("subject longer than 6 words");
   if (d.linkedin.length > 300) issues.push("LinkedIn note over 280 characters");
   for (const re of BANNED) if (re.test(d.email)) issues.push(`banned phrase: ${re.source}`);
-  const allowed = [play.proof.map((p) => p.text).join(" "), input.signals.map((s) => s.quotes.join(" ") + s.title + s.summary).join(" "), `${input.openRoles} ${input.salesRoles}`].join(" ");
+  // Approved material: the play itself (its ask may say "20 minutes"), its claims, and the posting.
+  const allowed = [play.cta, play.angle, play.proof.map((p) => p.text).join(" "), input.signals.map((s) => s.quotes.join(" ") + s.title + s.summary).join(" "), `${input.openRoles} ${input.salesRoles}`].join(" ");
   const nums = (d.email + " " + d.linkedin + " " + d.call_opener).match(/\d[\d,.%]*/g) ?? [];
   for (const n of nums) {
     const core = n.replace(/[,.%]+$/, "");
