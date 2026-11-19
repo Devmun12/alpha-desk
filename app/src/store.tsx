@@ -7,6 +7,7 @@ interface Toast { text: string; id: number }
 interface Ctx {
   desk: Desk;
   source: Source;
+  refreshing: boolean;
   accounts: Account[];
   byId: Map<number, Account>;
   signalsFor: (accountId: number) => Signal[];
@@ -48,14 +49,14 @@ function applyEvents(desk: Desk, local: DeskEvent[]): Desk {
 }
 
 export function DeskProvider({ children, fallback }: { children: ReactNode; fallback: (state: "loading" | "error", retry: () => void) => ReactNode }) {
-  const [base, setBase] = useState<{ desk: Desk; source: Source } | null>(null);
+  const [base, setBase] = useState<{ desk: Desk; source: Source; refreshing?: boolean } | null>(null);
   const [failed, setFailed] = useState(false);
   const [local, setLocal] = useState<DeskEvent[]>(readLocal);
   const [toastState, setToast] = useState<Toast | null>(null);
 
   const load = useCallback(() => {
     setFailed(false);
-    loadDesk().then(setBase).catch(() => setFailed(true));
+    loadDesk(setBase).then(setBase).catch(() => setFailed(true));
   }, []);
   useEffect(load, [load]);
 
@@ -74,7 +75,7 @@ export function DeskProvider({ children, fallback }: { children: ReactNode; fall
     const play = new Map<number, PlayRow>();
     for (const p of desk.plays) if (!play.has(p.accountId)) play.set(p.accountId, p);
     return {
-      desk, source: base.source, accounts: desk.accounts, byId,
+      desk, source: base.source, refreshing: !!base.refreshing, accounts: desk.accounts, byId,
       signalsFor: (id) => (sig.get(id) ?? []).sort((a, b) => b.confidence - a.confidence),
       playFor: (id) => play.get(id),
       eventsFor: (id) => desk.events.filter((e) => e.accountId === id),

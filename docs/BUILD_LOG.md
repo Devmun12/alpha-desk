@@ -39,6 +39,8 @@ What was built, in order, with what broke and what was thrown away. Times are UT
 
 **A brief that called a draft "approved".** The first daily brief ranked well but described a draft awaiting review as "an approved draft". The number guard did not catch it because it was a wrong word, not a wrong number. A reason that claims a state the account is not in now falls back to the rule-written reason.
 
+**A slow first screen.** The desk took 3 to 7 seconds to appear. Measured from a browser: the database builds the document in 0.17 seconds, but the document is 2.6 MB because it carries every posting's full text, and the edge function took 2.7 seconds to first byte warm and longer cold. The same data from the static host arrived in under a second. Fix: the deploy saves a light copy of the snapshot without posting text (about a tenth of the size). The app requests the light copy and the live document together, shows whichever lands first, and swaps in the live one when it arrives. The posting text fills in at that point; everything else is usable at once.
+
 ## AI output that was rejected
 
 **"Variable compensation" labelled as spreadsheet comp.** The extraction model tagged a quote about variable pay as proof that commissions run on spreadsheets. The quote was verbatim, so the quote check passed. That led to label guards: a quote tagged `spreadsheet_comp` must itself mention a spreadsheet or a manual process, or it is dropped. 41 of 847 quotes have been dropped by the verifier so far.

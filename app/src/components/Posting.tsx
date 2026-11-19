@@ -20,7 +20,8 @@ interface Props {
  * evidence highlighted in place and explained in the margin.
  */
 export function Posting({ signal, points = {}, feedback, onFeedback, text }: Props) {
-  const aliases = useDesk().desk.seller?.productAliases;
+  const { desk: { seller }, refreshing } = useDesk();
+  const aliases = seller?.productAliases;
   const own = namesOwnProduct(signal.tools, aliases);
   const content = text ?? signal.content ?? "";
   const [full, setFull] = useState(false);
@@ -65,11 +66,14 @@ export function Posting({ signal, points = {}, feedback, onFeedback, text }: Pro
               {shown.clippedEnd && <span className="elide">Rest of the posting</span>}
             </>
           ) : (
-            signal.evidence.map((e, i) => (
+            <>
+            {refreshing && <span className="elide shimmer">Loading the full posting…</span>}
+            {signal.evidence.map((e, i) => (
               <p key={i} style={{ marginBottom: 12 }}>
                 <mark className="hl" style={{ ["--c" as string]: FAMILY[familyOf(e.supports)].hl }}>{e.quote}<sup>{i + 1}</sup></mark>
               </p>
-            ))
+            ))}
+            </>
           )}
           {unplaced.map((e) => (
             <p key={e.quote} style={{ marginTop: 10 }}>

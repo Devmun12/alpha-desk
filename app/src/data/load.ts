@@ -16,25 +16,36 @@ async function fetchJson<T>(url: string, ms: number): Promise<T> {
   }
 }
 
+export interface Loaded { desk: Desk; source: Source; /** True while a light copy is on screen and the live document is still on its way. */ refreshing?: boolean }
+
 /**
- * Live data from the pipeline when the API is reachable; otherwise the snapshot that was
- * captured from the same API (embedded in the single-file build, or ./snapshot.json).
+ * First paint in under a second, live data a moment later.
+ * The live document is about 2.6 MB (it carries every posting's full text) and comes from an
+ * edge function that can take several seconds when cold. So the app starts two requests at
+ * once: a light copy of the last snapshot from the static host (no posting text, about a
+ * tenth of the size) and the live document. Whichever lands first is shown; when the live
+ * one arrives it replaces the light copy. If the live API never answers, the full snapshot
+ * is loaded and the app says so.
  */
-export async function loadDesk(): Promise<{ desk: Desk; source: Source }> {
+export async function loadDesk(onUpgrade: (next: Loaded) => void): Promise<Loaded> {
   if (import.meta.env.MODE === "single") {
     // Single-file builds embed a snapshot written to src/data/snapshot.json before building.
     const mod = await import("./snapshot.json");
     if (!mod.default) throw new Error("No snapshot embedded in this build");
     return { desk: mod.default as unknown as Desk, source: "snapshot" };
-  } else {
-    const forced = new URLSearchParams(window.location.search).get("source");
-    if (forced !== "snapshot") {
-      try {
-        return { desk: await fetchJson<Desk>(`${API_BASE}/desk`, 20000), source: "live" };
-      } catch { /* fall through to the snapshot */ }
-    }
-    return { desk: await fetchJson<Desk>("./snapshot.json", 20000), source: "snapshot" };
   }
+  const full = () => fetchJson<Desk>("./snapshot.json", 20000).then((desk): Loaded => ({ desk, source: "snapshot" }));
+  if (new URLSearchParams(window.location.search).get("source") === "snapshot") return full();
+
+  const live = fetchJson<Desk>(`${API_BASE}/desk`, 25000).then((desk): Loaded => ({ desk, source: "live" }));
+  const lite = fetchJson<Desk>("./snapshot-lite.json", 8000).then((desk): Loaded => ({ desk, source: "live", refreshing: true }));
+  const first = await Promise.any([live, lite]).catch(() => null);
+  if (first && !first.refreshing) return first;          // the live API won the race
+  if (first) {                                           // light copy is up: upgrade in the background
+    live.then(onUpgrade).catch(() => full().then(onUpgrade).catch(() => onUpgrade({ desk: first.desk, source: "snapshot" })));
+    return first;
+  }
+  return live.catch(full);                               // no light copy: wait for live, then the full snapshot
 }
 
 export async function postEvent(body: Record<string, unknown>): Promise<boolean> {

@@ -25,7 +25,7 @@ const TITLES: Record<string, string> = { brief: "Today's brief", desk: "Desk", p
 
 function Shell() {
   const { page, id } = useRoute();
-  const { desk, source, toastState } = useDesk();
+  const { desk, source, refreshing, toastState } = useDesk();
   // Land on the brief when there is one: it is the rep's first screen of the day.
   const known = NAV.some((x) => x.page === page) ? page : desk.brief?.items?.length && id == null && page === "" ? "brief" : "desk";
   useEffect(() => {
@@ -48,9 +48,11 @@ function Shell() {
           <span className="for">Hiring signals for revenue teams</span>
           <span className="grow" />
           <span className="freshness" title={`Data generated ${dateTime(desk.generatedAt)}`}>
-            <span className={`dot ${source === "snapshot" ? "snapshot" : ""}`} />
-            <span className="label">{source === "live" ? "Live" : "Snapshot"}:</span>
-            <span>boards read {ago(desk.stats.lastIngest)}</span>
+            <span className={`dot ${source === "snapshot" ? "snapshot" : ""} ${refreshing ? "pulse" : ""}`} />
+            {refreshing ? <span>Fetching the latest…</span> : <>
+              <span className="label">{source === "live" ? "Live" : "Snapshot"}:</span>
+              <span>boards read {ago(desk.stats.lastIngest)}</span>
+            </>}
           </span>
         </header>
         {source === "snapshot" && (
@@ -79,7 +81,12 @@ export default function App() {
     <DeskProvider fallback={(state, retry) => (
       <div className="empty" style={{ height: "100vh" }}>
         <Mark size={48} />
-        {state === "loading" ? <p className="soft">Loading today's desk…</p> : (
+        {state === "loading" ? (
+          <div className="loader" role="status" aria-live="polite">
+            <p className="loader-line"><span>Reading the job boards</span><span>Checking every quote against its posting</span><span>Sorting today's desk</span></p>
+            <div className="loader-rows" aria-hidden="true"><i /><i /><i /></div>
+          </div>
+        ) : (
           <>
             <h2>The desk could not load</h2>
             <p className="soft">Neither the live API nor the saved snapshot answered. Check your connection and try again.</p>
