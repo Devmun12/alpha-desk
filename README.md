@@ -2,7 +2,8 @@
 
 **Hiring signals for revenue teams.** Alpha Desk reads every open job posting at 200+ US software companies, finds the ones where a company describes, in its own words, a problem that sales-compensation, CPQ or sales-planning software solves, and hands the right rep a ranked morning brief, a scored account and a first touch that a panel of simulated buyers has already read.
 
-**Live app:** https://devmun12.github.io/alpha-desk/
+**Live app:** https://bit.ly/AlphaDesk1 (https://devmun12.github.io/alpha-desk/)  
+**Application note:** [docs/APPLICATION_NOTE.md](docs/APPLICATION_NOTE.md)
 
 > A company hiring a "Sales Compensation Analyst" to *"calculate monthly commissions in Google Sheets"* has just told you its stack, its pain and its timing. Intent tools catch accounts already researching vendors; a job post comes earlier, at the moment the company decides to throw headcount at the problem.
 
