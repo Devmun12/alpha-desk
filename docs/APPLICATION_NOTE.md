@@ -41,6 +41,10 @@ Connect the CRM so customers, owners and outcomes are real. Label 50 postings by
 
 ## About me
 
-I am a PGP student at ISB. Before that I ran IT programmes at DHL Express, including Gen AI adoption and Copilot rollouts. I want the role where I build the thing and then find out whether anyone used it.
+I am a PGP student at ISB. Before that I ran IT programmes at DHL Express, where I led Gen AI adoption and Copilot rollouts. That work taught me that shipping a tool is the easy half. The hard half is getting people to change how they work, and admitting when they have not.
+
+Alpha Desk went from an empty database to a live product on real data in one evening. It has a control group, a retirement rule for every play and an approve button a rep has to press, because I expect to be judged on whether your reps use it and whether replies go up. I would like to build the next one with your data.
+
+Other things I have built: [docs/SELECT_PORTFOLIO.md](SELECT_PORTFOLIO.md)
 
 Devesh
