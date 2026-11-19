@@ -52,3 +52,18 @@ export async function isInternal(req: Request, db: SupabaseClient): Promise<bool
   const { data, error } = await db.rpc("pipeline_secret_ok", { s: secret });
   return !error && data === true;
 }
+
+/**
+ * Single-flight: run `fn` only if no other invocation holds the job's lease. The lease
+ * expires on its own, so a crashed run cannot block the schedule for long.
+ */
+export async function withLease(db: SupabaseClient, job: string, seconds: number, fn: () => Promise<Response>): Promise<Response> {
+  const { data: holder, error } = await db.rpc("acquire_lease", { p_job: job, p_seconds: seconds });
+  if (error) return json({ error: error.message }, 500);
+  if (!holder) return json({ skipped: `${job} already running` });
+  try {
+    return await fn();
+  } finally {
+    await db.rpc("release_lease", { p_job: job, p_holder: holder });
+  }
+}

@@ -7,7 +7,7 @@
 // Internal (pg_cron via pg_net, x-pipeline-secret header):
 //   POST /api/ingest | /api/extract | /api/draft
 // Tables stay closed to anon; this function holds the service role.
-import { admin, cors, isInternal, json } from "../_shared/db.ts";
+import { admin, cors, isInternal, json, withLease } from "../_shared/db.ts";
 import { extractPosting } from "../_shared/extract.ts";
 import { draftPlay } from "../_shared/draft.ts";
 import { hasKey, models } from "../_shared/llm.ts";
@@ -29,9 +29,11 @@ Deno.serve(async (req) => {
     if (["/ingest", "/extract", "/draft"].includes(route)) {
       if (req.method !== "POST" || !(await isInternal(req, db))) return json({ error: "unauthorized" }, 401);
       const body = await req.json().catch(() => ({}));
-      if (route === "/ingest") return await ingest(db, body);
-      if (route === "/extract") return await extract(db, body);
-      return await draft(db, body);
+      const job = route.slice(1);
+      const run = () => (job === "ingest" ? ingest(db, body) : job === "extract" ? extract(db, body) : draft(db, body));
+      // Targeted runs (explicit ids) skip the lease; scheduled runs are single-flight.
+      if (body.accountIds?.length || body.postIds?.length) return await run();
+      return await withLease(db, job, 170, run);
     }
 
     if (req.method === "GET" && route.startsWith("/desk")) {

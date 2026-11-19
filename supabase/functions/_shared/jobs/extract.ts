@@ -7,19 +7,18 @@ import { EXTRACT_VERSION, extractPosting } from "../extract.ts";
 import { hasKey, LlmError } from "../llm.ts";
 
 const BUDGET_MS = 110_000;
-const MIN_GAP_MS = 4_500; // per worker
-const CONCURRENCY = 3;
 
-export async function extract(db: SupabaseClient, body: { limit?: number; postIds?: number[] }): Promise<Response> {
+export async function extract(db: SupabaseClient, body: { limit?: number; postIds?: number[]; concurrency?: number; gapMs?: number }): Promise<Response> {
   if (!hasKey()) return json({ skipped: "GEMINI_API_KEY not set" });
+  const CONCURRENCY = Math.max(1, Math.min(body.concurrency ?? 3, 6));
+  const MIN_GAP_MS = Math.max(1_000, body.gapMs ?? 4_500); // per worker
 
+  // Mark runs that died mid-flight (CPU or wall-clock limit) so the run log stays honest.
   await db.from("runs").update({ status: "error", error: "timed out", finished_at: new Date().toISOString() })
-    .eq("kind", "extract").eq("status", "running").lt("started_at", new Date(Date.now() - 4 * 60e3).toISOString());
-  const { count: running } = await db.from("runs").select("id", { count: "exact", head: true }).eq("kind", "extract").eq("status", "running");
-  if ((running ?? 0) > 0 && !body.postIds?.length) return json({ skipped: "extract already running" });
+    .eq("kind", "extract").eq("status", "running").lt("started_at", new Date(Date.now() - 5 * 60e3).toISOString());
 
   // Queue = open candidates without a signal at this prompt version. Prospects before customers.
-  const { data: queue, error } = await db.rpc("extract_queue", { p_version: EXTRACT_VERSION, p_limit: Math.min(body.limit ?? 30, 45) });
+  const { data: queue, error } = await db.rpc("extract_queue", { p_version: EXTRACT_VERSION, p_limit: Math.min(body.limit ?? 30, 60) });
   if (error) return json({ error: error.message }, 500);
   const items = (body.postIds?.length ? (queue ?? []).filter((q: { id: number }) => body.postIds!.includes(q.id)) : queue) ?? [];
   if (items.length === 0) return json({ queue: 0 });
@@ -27,8 +26,8 @@ export async function extract(db: SupabaseClient, body: { limit?: number; postId
   const runId = await startRun(db, "extract");
   const t0 = Date.now();
   const stats = { read: 0, relevant: 0, droppedQuotes: 0, inputTokens: 0, outputTokens: 0, models: {} as Record<string, number>, errors: [] as string[] };
-  // Three workers, each paced; free-tier quotas are per model and the client falls back
-  // across Flash-Lite models on a 429, so this stays inside limits while draining ~3x faster.
+  // Paced workers; free-tier quotas are per model and the client falls back across
+  // Flash-Lite models on a 429, so this stays inside limits while draining the queue quickly.
   type Item = { id: number; account_id: number; company: string; title: string; department: string | null; location: string | null; content: string };
   const queueItems = [...(items as Item[])];
   let stop = false;

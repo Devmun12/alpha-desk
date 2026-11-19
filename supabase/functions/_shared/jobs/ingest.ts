@@ -13,11 +13,10 @@ export async function ingest(db: SupabaseClient, body: Body): Promise<Response> 
 
   // Free-tier edge functions get ~2s of CPU per request, so ingestion runs as a
   // single-flight job in small batches that pg_cron repeats until every board is fresh.
+  // Mark runs that died mid-flight (CPU or wall-clock limit) so the run log stays honest.
   await db.from("runs").update({ status: "error", error: "timed out", finished_at: new Date().toISOString() })
     .eq("kind", "ingest").eq("status", "running").lt("started_at", new Date(Date.now() - 5 * 60e3).toISOString());
-  const { count: running } = await db.from("runs").select("id", { count: "exact", head: true })
-    .eq("kind", "ingest").eq("status", "running");
-  if ((running ?? 0) > 0 && !body.accountIds?.length) return json({ skipped: "ingest already running" });
+
   const staleHours = body.staleHours ?? 20;
 
   let q = db.from("accounts").select("id, name, ats, ats_slug").not("ats", "is", null);

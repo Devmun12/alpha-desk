@@ -19,10 +19,9 @@ interface ScoreRow {
 export async function draft(db: SupabaseClient, body: { limit?: number; minScore?: number; accountIds?: number[] }): Promise<Response> {
   if (!hasKey()) return json({ skipped: "GEMINI_API_KEY not set" });
 
+  // Mark runs that died mid-flight (CPU or wall-clock limit) so the run log stays honest.
   await db.from("runs").update({ status: "error", error: "timed out", finished_at: new Date().toISOString() })
-    .eq("kind", "draft").eq("status", "running").lt("started_at", new Date(Date.now() - 4 * 60e3).toISOString());
-  const { count: running } = await db.from("runs").select("id", { count: "exact", head: true }).eq("kind", "draft").eq("status", "running");
-  if ((running ?? 0) > 0 && !body.accountIds?.length) return json({ skipped: "draft already running" });
+    .eq("kind", "draft").eq("status", "running").lt("started_at", new Date(Date.now() - 5 * 60e3).toISOString());
 
   // Draft only once the extraction backlog is clear, so each account is drafted on its full evidence.
   if (!body.accountIds?.length) {
