@@ -61,7 +61,6 @@ supabase/
   migrations/                     schema, auth, scoring, queue, desk API, schedules, screen v2, agent layer
 app/                              the desk (React + TypeScript)
 pipeline/companies.py             target account list and slug guesses
-docs/BUILD_LOG.md                 what broke, what was rejected, what is not done
 ```
 
 ## Run it yourself
@@ -81,7 +80,7 @@ docs/BUILD_LOG.md                 what broke, what was rejected, what is not don
 ## Limits
 
 - Customer status comes from a short list in the seller profile and from postings that name the seller's product, not from a CRM. Owners and outcomes are not connected, so replies and meetings are logged by hand.
-- Extraction precision has not been measured against hand labels yet, and the score puts too many accounts in the top tier. Both are in `docs/BUILD_LOG.md` under "Not done".
+- Extraction precision has not been measured against hand labels yet, and the score puts too many accounts in the top tier. Both are the next things to build.
 - The buyer panel is a simulation. Its scores rank drafts against each other; they are not a forecast of reply rates.
 - Visitor actions on the live demo are logged but stay in the visitor's browser, so the shared desk cannot be changed from outside.
 - Approved claims in the play catalog are capability statements. Replace them with verified proof before sending at volume.
