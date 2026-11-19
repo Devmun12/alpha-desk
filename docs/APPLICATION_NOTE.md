@@ -45,6 +45,6 @@ I am a PGP student at ISB. Before that I ran IT programmes at DHL Express, where
 
 Alpha Desk went from an empty database to a live product on real data in one evening. It has a control group, a retirement rule for every play and an approve button a rep has to press, because I expect to be judged on whether your reps use it and whether replies go up. I would like to build the next one with your data.
 
-Other things I have built: [docs/SELECT_PORTFOLIO.md](SELECT_PORTFOLIO.md)
+Other things I have built, each live and with a short description: https://bit.ly/devesh_pf ([docs/SELECT_PORTFOLIO.md](SELECT_PORTFOLIO.md))
 
 Devesh

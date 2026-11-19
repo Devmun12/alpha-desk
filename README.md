@@ -5,6 +5,8 @@
 **Live app:** https://bit.ly/AlphaDesk1 (https://devmun12.github.io/alpha-desk/)  
 **Application note:** [docs/APPLICATION_NOTE.md](docs/APPLICATION_NOTE.md)
 
+**Select portfolio (other things I have built):** https://bit.ly/devesh_pf ([docs/SELECT_PORTFOLIO.md](docs/SELECT_PORTFOLIO.md))
+
 > A company hiring a "Sales Compensation Analyst" to *"calculate monthly commissions in Google Sheets"* has just told you its stack, its pain and its timing. Intent tools catch accounts already researching vendors; a job post comes earlier, at the moment the company decides to throw headcount at the problem.
 
 ## What it does
