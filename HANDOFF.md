@@ -458,3 +458,116 @@ where p.status = 'draft' order by p.id desc limit 10;
 | Why not intent-data vendors? | Job posts are first-party, specific and citeable, and they name the tools a company runs. They complement intent data rather than replace it. |
 | What breaks at scale? | Free-tier CPU limits and model quotas, plus board slugs that change. The fix is to move ingest to a queue or worker and pay for model capacity. |
 | What was hard? | The BUILD_LOG items in §8 #6. |
+
+---
+
+## 13. Technical reference
+
+### Tool versions
+
+| Tool | Version |
+|---|---|
+| Node | 22 (CI uses 22; local build used 22.23) |
+| Deno | 2.x (tests ran on 2.9.6) |
+| Edge runtime imports | `npm:@supabase/supabase-js@2` (no jsr.io or esm.sh imports) |
+| Frontend | Vite 5, React 18, TypeScript 5.9 |
+| Gemini models seen | gemini-3.1-flash-lite and gemini-3.5-flash-lite for extraction; 3.5–3.8-flash for drafting |
+
+### Table columns (schema `public`)
+
+| Table | Columns |
+|---|---|
+| accounts | id bigint, name, domain, category, crm_status (`prospect` / `customer` / `open_opp`), ats (`greenhouse` / `lever` / `ashby`), ats_slug, open_roles int, sales_roles int, board_checked_at tstz, created_at |
+| job_posts | id, account_id, ats, external_id (`slug:id`, unique with ats), title, department, location, url, posted_at, content (candidates only), content_hash, prefilter text[], is_candidate bool, first_seen, last_seen, closed_at |
+| signals | id, job_post_id, account_id, prompt_version (unique with job_post_id), model, relevant bool, role_family, seniority, signal_types text[], products text[], current_tools jsonb, evidence jsonb `[{quote, supports}]`, facts jsonb, summary, confidence numeric, input_tokens, output_tokens, latency_ms, dropped_quotes int, created_at |
+| plays | id, account_id, play_key, status (draft / approved / sent / dismissed / held_out), holdout bool, persona, angle (= why_now), subject, email, linkedin, call_opener, evidence jsonb (signal ids), checks jsonb `{passed, issues[], words}`, quote_used, model, prompt_version (unique with account_id and play_key), input_tokens, output_tokens, created_at, updated_at |
+| events | id, account_id, play_id, signal_id, type, payload jsonb, actor, created_at |
+| runs | id, kind (ingest / extract / draft / analyze), started_at, finished_at, status (running / ok / partial / error), stats jsonb, error |
+| signal_weights | signal_type (pk), points int, label, play_key, description |
+| role_weights | role_family (pk), multiplier numeric, label |
+
+`v_signals` is `job_posts` joined to `signals`, keeping the latest prompt version per post. `v_account_scores` adds intent, fit, timing, score, tier, holdout, intent_breakdown jsonb, top_signal, products, relevant_posts and freshest.
+
+### Example records (real, abridged)
+
+This is a real signal (`v_signals` row 222, Amplitude):
+
+```json
+{
+  "title": "Senior Salesforce Engineer, Quote-to-Cash",
+  "role_family": "gtm_systems", "seniority": "ic",
+  "signal_types": ["cpq_legacy", "cpq_pain"], "products": ["cpq"],
+  "current_tools": [{"name": "Salesforce CPQ", "category": "cpq", "context": "in_use"},
+                    {"name": "Salesforce", "category": "crm", "context": "in_use"}],
+  "evidence": [
+    {"quote": "Contribute to Quote-to-Cash transformation, including CPQ migration, new currencies and commercial models, and integration of acquired products.", "supports": "cpq_legacy"},
+    {"quote": "Reduce recurring operational work through automation, improved validation, and targeted fixes that prevent repeat deal escalations and manual data corrections.", "supports": "cpq_pain"}
+  ],
+  "summary": "Amplitude is actively planning a CPQ migration and seeking to reduce manual deal escalations and operational bottlenecks within their existing Salesforce Quote-to-Cash architecture.",
+  "confidence": 1, "model": "gemini-3.1-flash-lite", "prompt_version": "extract.v2"
+}
+```
+
+This is the shape of a play row. No drafts existed at handoff time, so the values below are illustrative, not real output:
+
+```json
+{
+  "play_key": "cpq-end-of-sale", "status": "draft", "holdout": false,
+  "persona": "Deal desk lead or RevOps leader",
+  "angle": "They are scoping a CPQ migration now.",
+  "subject": "your quote-to-cash rebuild",
+  "email": "Hi {{first_name}}, saw the Senior Salesforce Engineer, Quote-to-Cash opening ... {{sender_name}}",
+  "linkedin": "...", "call_opener": "...",
+  "quote_used": "CPQ migration, new currencies and commercial models",
+  "checks": {"passed": true, "issues": [], "words": 88},
+  "prompt_version": "draft.v1"
+}
+```
+
+### Getting real data without Supabase access
+
+- `https://devmun12.github.io/alpha-desk/snapshot.json` is saved by every deploy. You can also use `…/functions/v1/api/desk?download=1`.
+- Save it as `app/public/snapshot.json`, then run `npm run dev` and open `?source=snapshot`. The app now runs entirely offline, on real data.
+- `app/dev/fixture.mjs` generates invented demo data if you need edge cases. Never ship it.
+
+### Recipes
+
+**Change a prompt (extraction or drafting)**
+1. Edit `SYSTEM`, the schema or the rules in `_shared/extract.ts` or `_shared/draft.ts`.
+2. Bump `EXTRACT_VERSION` or `DRAFT_VERSION`.
+3. Run `deno test supabase/functions/tests`, then deploy `api`.
+4. The queue re-reads every candidate at the new version automatically. The views pick the newest version, and old rows stay as history.
+5. A new drafting version means every account is re-drafted. The holdout assignment doesn't change.
+
+**Add a signal type** (all six places, or the type silently drops out):
+1. `_shared/extract.ts`: add it to `SIGNAL_TYPES` and define it under rule 5 of `SYSTEM`. Optionally add a `LABEL_GUARDS` entry.
+2. `_shared/plays.ts`: add it to `SIGNAL_PLAY`.
+3. `app/src/types.ts`: add it to the `SignalType` union.
+4. `app/src/data/taxonomy.ts`: add it to `SIGNAL` (label, short label, colour family).
+5. SQL: `insert into signal_weights (signal_type, points, label, play_key, description) values (...)`. Save the same SQL as the next migration file.
+6. Bump `EXTRACT_VERSION` so existing postings are re-read. Add a test.
+
+**Add a play**
+1. Add an entry to `PLAYS` in `_shared/plays.ts` with every field filled. Its claims must be capability statements unless you have verified proof with a source.
+2. Map signals to it in `SIGNAL_PLAY`, or add a rule in `choosePlay`, and update `signal_weights.play_key` to match.
+3. The app imports `plays.ts` directly, so the Plays page updates when you rebuild. Deploy `api` as well.
+
+**Tune scoring (no deploy needed)**
+- Run `update signal_weights set points = ... where signal_type = ...`, or the same on `role_weights`.
+- The view recalculates immediately. Thresholds (tiers 70/50, drafting ≥35) live in the view and in `jobs/draft.ts`.
+
+**Add a company**
+1. Find its board slug, e.g. `boards-api.greenhouse.io/v1/boards/<slug>/jobs` returns 200 (see `pipeline/discover_boards.sql`).
+2. Run `insert into accounts (name, domain, category, crm_status, ats, ats_slug) values ('Acme', 'acme.com', 'Dev tools', 'prospect', 'greenhouse', 'acme')`.
+3. Add it to `pipeline/companies.py` so the repo stays the source of truth.
+4. It is picked up on the next ingest tick, or run `select ops.invoke('api/ingest', '{"accountIds":[<id>]}'::jsonb)`.
+
+**Mark a customer**
+- Run `update accounts set crm_status = 'customer' where domain = '...'`. Customers get the expand-account play, and the next drafting version picks that up.
+
+### Test coverage
+
+- The 9 Deno tests cover the prefilter rules, `verifyQuote`, the `verify()` guards, `checkDraft` and `choosePlay`.
+- Nothing covers the job handlers, the SQL views or the app.
+- If you change scoring SQL, check it by hand with `select name, score, tier, intent_breakdown from v_account_scores order by score desc limit 20`.
+- The cheapest worthwhile addition is a precision eval set: 30–50 hand-labelled postings in a fixture, run through `verify()` and the prompt.
