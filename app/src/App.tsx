@@ -6,11 +6,13 @@ import { Impact } from "./pages/Impact";
 import { Pipeline } from "./pages/Pipeline";
 import { Read } from "./pages/Read";
 import { About } from "./pages/About";
-import { IconAbout, IconDesk, IconImpact, IconPipeline, IconPlays, IconRead, Mark } from "./components/icons";
+import { BriefPage } from "./pages/Brief";
+import { IconAbout, IconBrief, IconDesk, IconImpact, IconPipeline, IconPlays, IconRead, Mark } from "./components/icons";
 import { ago, dateTime } from "./lib/format";
 import { LIVE_APP_URL } from "./data/load";
 
 const NAV = [
+  { page: "brief", label: "Brief", icon: IconBrief },
   { page: "desk", label: "Desk", icon: IconDesk },
   { page: "plays", label: "Plays", icon: IconPlays },
   { page: "impact", label: "Impact", icon: IconImpact },
@@ -19,12 +21,13 @@ const NAV = [
   { page: "about", label: "About", icon: IconAbout },
 ];
 
-const TITLES: Record<string, string> = { desk: "Desk", plays: "Plays", impact: "Impact", pipeline: "Pipeline", read: "Read a posting", about: "How it works" };
+const TITLES: Record<string, string> = { brief: "Today's brief", desk: "Desk", plays: "Plays", impact: "Impact", pipeline: "Pipeline", read: "Read a posting", about: "How it works" };
 
 function Shell() {
   const { page, id } = useRoute();
   const { desk, source, toastState } = useDesk();
-  const known = NAV.some((x) => x.page === page) ? page : "desk";
+  // Land on the brief when there is one: it is the rep's first screen of the day.
+  const known = NAV.some((x) => x.page === page) ? page : desk.brief?.items?.length && id == null && page === "" ? "brief" : "desk";
   useEffect(() => {
     const a = id != null ? desk.accounts.find((x) => x.id === id) : undefined;
     document.title = `${a ? `${a.name} · ` : ""}${TITLES[known]} · Alpha Desk`;
@@ -57,6 +60,7 @@ function Shell() {
           </div>
         )}
         <main className="page" id="main">
+          {known === "brief" && <BriefPage />}
           {known === "desk" && <Desk selected={id} />}
           {known === "plays" && <Plays />}
           {known === "impact" && <Impact />}

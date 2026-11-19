@@ -15,7 +15,16 @@ export function Impact() {
   const s = desk.stats;
   const [baseline, setBaseline] = useState(3);
   const [lift, setLift] = useState(2);
-  const [weekly, setWeekly] = useState(40);
+  // Measured, not assumed: accounts with a relevant posting dated in the last 7 days.
+  const freshWeekly = useMemo(() => {
+    const week = Date.now() - 7 * 864e5;
+    return new Set(desk.signals.filter((x) => x.postedAt && new Date(x.postedAt).getTime() > week).map((x) => x.accountId)).size;
+  }, [desk.signals]);
+  const [weekly, setWeekly] = useState(() => Math.max(5, freshWeekly));
+  const HARD = ["spreadsheet_comp", "icm_incumbent", "icm_greenfield", "cpq_legacy"];
+  const hardAccounts = desk.accounts.filter((a) => Object.keys(a.breakdown ?? {}).some((k) => HARD.includes(k))).length;
+  const reviews = Object.values(desk.reviews ?? {}).filter((r) => r.decision);
+  const avg = (xs: number[]) => (xs.length ? (xs.reduce((a, b) => a + b, 0) / xs.length).toFixed(1) : "–");
   const [minutes, setMinutes] = useState(20);
   const [priceIn, setPriceIn] = useState(0.1);
   const [priceOut, setPriceOut] = useState(0.4);
@@ -73,8 +82,8 @@ export function Impact() {
       <div className="stat-line">
         <Stat v={n(s.postings)} k="open postings read" />
         <Stat v={n(desk.accounts.length)} k="accounts with a verified signal" />
-        <Stat v={`$${costNow.toFixed(2)}`} k="model cost so far, at the prices below" />
-        <Stat v={`${Math.round(hours)} h`} k={`research time saved at ${minutes} min an account`} />
+        <Stat v={n(freshWeekly)} k="accounts with a new signal in the last 7 days" />
+        <Stat v={n(hardAccounts)} k="of them with a hard signal: spreadsheets, a named tool, a first comp hire or Salesforce CPQ" />
       </div>
 
       <div className="section panel">
@@ -117,7 +126,7 @@ export function Impact() {
             <label className="field">New accounts a week<input className="input num" type="number" min={5} max={500} step={5} value={weekly} onChange={(e) => setWeekly(Number(e.target.value) || 40)} /></label>
           </div>
           <p style={{ marginTop: 14, fontSize: 15 }}><b className="num">{n(nPerArm)}</b> accounts per arm. At {weekly} a week, the control arm fills in about <b className="num">{n(Math.ceil(nPerArm / Math.max(1, weekly * 0.2)))}</b> weeks; the treatment arm in <b className="num">{n(weeksToRead)}</b>.</p>
-          <p className="small soft" style={{ marginTop: 8 }}>Until then, decisions run on leading indicators: rep approval rate, signal precision and positive-reply rate per play. If the control arm is the bottleneck, raise its share or pool across plays.</p>
+          <p className="small soft" style={{ marginTop: 8 }}>The weekly figure starts at what this list produced in the last 7 days ({n(freshWeekly)} accounts). At that rate the experiment cannot read out, and the per-play kill rules (100 to 150 sends each) cannot trigger either. The constraint is the size of the account list, not the method: the same pipeline on a few thousand accounts fills both arms in a quarter. Until then, decisions run on leading indicators: rep approval rate, rep-rated signal precision and the buyer panel's score per play.</p>
         </div>
       </div>
 
@@ -140,6 +149,9 @@ export function Impact() {
             <dt>Quotes kept after verification</dt><dd className="num">{n(s.keptQuotes)}</dd>
             <dt>Quotes dropped as unverifiable</dt><dd className="num">{n(s.droppedQuotes)} ({pct(s.droppedQuotes, s.keptQuotes + s.droppedQuotes)})</dd>
             <dt>Drafts passing all checks</dt><dd className="num">{n(m.passed)} of {n(m.drafted)}</dd>
+            <dt>Read by the buyer panel</dt><dd className="num">{n(reviews.length)}</dd>
+            <dt>Panel score, first draft to shipped</dt><dd className="num">{avg(reviews.map((r) => r.firstMean))} to {avg(reviews.map((r) => r.mean))} of 5</dd>
+            <dt>Rewrites kept / thrown away</dt><dd className="num">{n(reviews.filter((r) => r.shipped === 1).length)} / {n(reviews.filter((r) => r.shipped === 0 && r.rounds.length + (r.other ? 1 : 0) > 1).length)}</dd>
             <dt>Rep-rated precision</dt><dd className="num">{m.up + m.down ? pct(m.up, m.up + m.down) : "no ratings yet"}</dd>
           </dl>
         </div>
@@ -156,7 +168,8 @@ export function Impact() {
             <label className="field">$ per 1M out<input className="input num" type="number" step={0.05} min={0} value={priceOut} onChange={(e) => setPriceOut(Number(e.target.value) || 0)} /></label>
           </div>
           <label className="field" style={{ marginTop: 8 }}>Manual research per account, minutes<input className="input num" type="number" min={1} max={120} value={minutes} onChange={(e) => setMinutes(Number(e.target.value) || 20)} /></label>
-          <p className="small muted" style={{ marginTop: 8 }}>Prices and minutes are assumptions to edit, not measurements.</p>
+          <p className="small soft" style={{ marginTop: 8 }}>At {minutes} minutes of manual research an account, the {n(desk.accounts.length)} scored accounts are about {Math.round(hours)} hours of reading. Model cost so far at these prices: ${costNow.toFixed(2)}.</p>
+          <p className="small muted" style={{ marginTop: 4 }}>Prices and minutes are assumptions to edit, not measurements.</p>
         </div>
       </div>
     </div>

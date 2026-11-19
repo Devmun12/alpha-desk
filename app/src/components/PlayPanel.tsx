@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { Account, PlayRow, Signal } from "../types";
+import type { Account, PlayRow, Review, Signal } from "../types";
 import { PLAY_BY_KEY } from "../../../supabase/functions/_shared/plays.ts";
 import { useDesk } from "../store";
 import { hubspotPayload, slackAlert } from "../lib/integrations";
@@ -11,7 +11,8 @@ type Channel = "email" | "linkedin" | "call";
 const DISMISS = ["Not our ICP", "Already in a conversation", "Signal is wrong", "Bad timing"] as const;
 
 export function PlayPanel({ account, play, signals }: { account: Account; play: PlayRow | undefined; signals: Signal[] }) {
-  const { log, toast, source } = useDesk();
+  const { log, toast, source, desk } = useDesk();
+  const review = play ? desk.reviews?.[play.id] : undefined;
   const [channel, setChannel] = useState<Channel>("email");
   const [subject, setSubject] = useState(play?.subject ?? "");
   const [body, setBody] = useState(play?.email ?? "");
@@ -125,6 +126,7 @@ export function PlayPanel({ account, play, signals }: { account: Account; play: 
               )}
             </div>
           )}
+          {review && review.rounds.length > 0 && <ReviewTrace review={review} edited={edited} />}
         </div>
 
         <div className="actions">
@@ -149,7 +151,7 @@ export function PlayPanel({ account, play, signals }: { account: Account; play: 
 
       {dialog === "hubspot" && (
         <Dialog title="Approved and logged" onClose={() => setDialog(null)} footer={<button className="btn primary" onClick={() => setDialog(null)}>Done</button>}>
-          <p>The play is approved and the event is recorded{source === "live" ? " in the pipeline database" : " in this browser"}. HubSpot is not connected in this demo, so here is the exact request the connector sends: the company gets the score and play as properties, and the owner gets a task with the draft.</p>
+          <p>The play is approved{source === "live" ? " and the event is logged" : " in this browser"}. HubSpot is not connected in this demo, so here is the exact request the connector sends: the company gets the score and play as properties, and the owner gets a task with the draft.</p>
           <pre className="code">{JSON.stringify(hubspotPayload(account, play, subject, body), null, 2)}</pre>
         </Dialog>
       )}
@@ -176,6 +178,55 @@ export function PlayPanel({ account, play, signals }: { account: Account; play: 
         </Dialog>
       )}
     </section>
+  );
+}
+
+const DECISION: Record<Review["decision"], string> = {
+  passed_first_time: "Every buyer scored the first draft 4 or higher and the code checks passed, so nothing was rewritten.",
+  rewrite_scored_higher: "The panel scored the rewrite higher than the first draft, so the rewrite is the text above.",
+  rewrite_scored_no_better: "The panel scored the rewrite no higher than the first draft, so the rewrite was thrown away and the first draft stands.",
+  rewrite_failed_checks: "The editor's rewrite broke a code check (for example a number that is not in the approved material), so it was thrown away and the first draft stands.",
+  rewrite_fixed_checks: "The first draft failed a code check and the rewrite passed, so the rewrite is the text above.",
+  no_rewrite_offered: "The editor had nothing better to offer, so the first draft stands.",
+  out_of_time: "The run reached its time limit before the panel could read the rewrite. A rewrite nobody has read never ships, so the first draft stands.",
+};
+
+/** What the simulated buyers said, round by round, and what the loop decided. */
+function ReviewTrace({ review, edited }: { review: Review; edited: boolean }) {
+  if (!review.decision) return null; // an older review format: nothing reliable to show
+  const improved = review.shipped === 1 && review.mean > review.firstMean;
+  return (
+    <details className="review" open>
+      <summary>
+        <b>Buyer review panel</b>
+        <span className={`pill ${review.mean >= 4 ? "ok" : review.mean >= 3 ? "" : "warn"}`}>{review.mean.toFixed(1)} of 5 likely to reply</span>
+        <span className="small muted">{improved ? `up from ${review.firstMean.toFixed(1)} after one rewrite` : review.rounds.length === 2 ? "rewrite tried, first draft kept" : "one round"}</span>
+      </summary>
+      <p className="small soft">Three simulated buyers read the draft before you did and scored how likely they are to reply: 2 is "read and ignored", 4 is "would probably reply". They are told to be hard to impress. Treat the objections as an editing list, not a forecast.</p>
+      {review.rounds.map((r) => (
+        <div className="round" key={r.round}>
+          <div className="small muted">Round {r.round}: the panel read the {r.version === 0 ? "first draft" : "rewrite"} and scored it {r.mean.toFixed(1)} ({r.model})</div>
+          <ul className="verdicts">
+            {r.verdicts.map((v) => (
+              <li key={v.buyer} className={v.score >= 4 ? "yes" : v.score <= 2 ? "no" : ""}>
+                <span className="who">{v.buyer}</span>
+                <span className="call num">{v.score} / 5</span>
+                <span className="say">{v.objection}</span>
+              </li>
+            ))}
+          </ul>
+          {r.round === 1 && r.note && review.decision !== "passed_first_time" && <p className="small soft"><b>Editor:</b> {r.note}</p>}
+        </div>
+      ))}
+      <p className="small soft"><b>Decision:</b> {DECISION[review.decision]}</p>
+      {edited && <p className="small soft"><b>You have edited this draft</b> since the panel read it.</p>}
+      {review.other && (
+        <details className="first">
+          <summary className="small">Show the {review.other.version === 0 ? "first draft" : "rewrite"} that did not ship{review.other.mean != null ? ` (scored ${review.other.mean.toFixed(1)})` : ""}</summary>
+          <div className="source-text" style={{ fontSize: 14 }}><b>{review.other.subject}</b>{"\n\n"}{review.other.email}</div>
+        </details>
+      )}
+    </details>
   );
 }
 

@@ -106,7 +106,7 @@ export function useRoute(): { page: string; id: number | null } {
     const h = decodeURIComponent(window.location.hash.replace(/^#/, ""));
     const m = h.match(/^account-(\d+)$/);
     if (m) return { page: "desk", id: Number(m[1]) };
-    return { page: h || "desk", id: null };
+    return { page: h, id: null };
   };
   const [r, setR] = useState(parse);
   useEffect(() => {

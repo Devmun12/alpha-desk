@@ -5,7 +5,9 @@ const assert = (v: unknown, msg?: string) => nodeAssert.ok(v, msg);
 const assertEquals = (a: unknown, b: unknown) => nodeAssert.deepEqual(a, b);
 import { prefilter, titleScreen } from "../_shared/prefilter.ts";
 import { verify, verifyQuote, type Extraction } from "../_shared/extract.ts";
-import { checkDraft } from "../_shared/draft.ts";
+import { checkDraft, pickVersion, readVerdicts } from "../_shared/draft.ts";
+import { acceptModelBrief, priority, type Candidate } from "../_shared/jobs/brief.ts";
+import { modelOrder } from "../_shared/llm.ts";
 import { choosePlay, PLAY_BY_KEY } from "../_shared/plays.ts";
 
 Deno.test("screen ignores pay-transparency boilerplate on sales roles", () => {
@@ -76,4 +78,48 @@ Deno.test("Salesforce CPQ or a named incumbent outranks a slightly stronger gene
   assertEquals(choosePlay("prospect", { new_revops_leader: 20, icm_incumbent: 18 }), "incumbent-swap");
   assertEquals(choosePlay("prospect", { spreadsheet_comp: 30, planning_buildout: 14 }), "retire-the-spreadsheet");
   assertEquals(choosePlay("customer", { cpq_legacy: 24 }), "expand-account");
+});
+
+// ---- review panel, brief and model order ---------------------------------------------
+Deno.test("panel: a rewrite ships only if it is clean and the panel scored it higher", () => {
+  const first = { passed: true, mean: 2.3 };
+  assertEquals(pickVersion(first, { passed: true, mean: 3.3 }), { shipped: 1, decision: "rewrite_scored_higher" });
+  assertEquals(pickVersion(first, { passed: true, mean: 2.3 }), { shipped: 0, decision: "rewrite_scored_no_better" });
+  assertEquals(pickVersion(first, { passed: false, mean: 4.7 }), { shipped: 0, decision: "rewrite_failed_checks" });
+  assertEquals(pickVersion(first, { passed: true, mean: null }), { shipped: 0, decision: "out_of_time" });
+  assertEquals(pickVersion({ passed: false, mean: 3 }, { passed: true, mean: null }), { shipped: 1, decision: "rewrite_fixed_checks" });
+});
+
+Deno.test("panel: scores are clamped and buyer names come from the panel, not the model", () => {
+  const r = readVerdicts([{ buyer: "CEO of Everything", score: 9, objection: "a" }, { score: 0, objection: "b" }, { score: 4, objection: "c" }]);
+  assertEquals(r.verdicts.map((v) => v.score), [5, 1, 4]);
+  assertEquals(r.verdicts[0].buyer, "Head of Revenue Operations");
+  assertEquals(r.verdicts.map((v) => v.would_reply), [true, false, true]);
+  assertEquals(r.mean, 3.3);
+});
+
+const cand = (id: number, over: Partial<Candidate> = {}): Candidate => {
+  const c = { accountId: id, name: `Co${id}`, score: 70, tier: "A", customer: false, action: "review_draft" as const, play: "Retire the spreadsheet", daysSincePost: 3, hardSignals: ["spreadsheet_comp"], panel: "scored 3.7 of 5 by the buyer panel", panelMean: 3.7, checksPassed: true, quote: "q", postTitle: "Comp Analyst", ...over };
+  return { ...c, priority: priority(c) };
+};
+
+Deno.test("brief: customers and nearly-finished work outrank cold drafts", () => {
+  assert(cand(1, { customer: true, action: "confirm_owner" }).priority > cand(2).priority);
+  assert(cand(3, { action: "send_approved" }).priority > cand(2).priority);
+  assert(cand(4, { checksPassed: false }).priority < cand(2).priority);
+});
+
+Deno.test("brief: the model cannot add accounts or numbers", () => {
+  const cs = [cand(1), cand(2), cand(3), cand(4)];
+  const r = acceptModelBrief(cs, { items: [{ account_id: 2, why: "Posted 3 days ago with a spreadsheet signal." }, { account_id: 99, why: "invented" }, { account_id: 1, why: "They have 500 reps." }, { account_id: 3, why: "Fresh." }, { account_id: 2, why: "repeat" }] }, 5);
+  assert(r.ok);
+  assertEquals(r.items.map((i) => i.c.accountId), [2, 1, 3]);
+  assert(!r.items[1].why.includes("500"));
+  assertEquals(acceptModelBrief(cs, { items: [{ account_id: 99, why: "x" }] }, 5).ok, false);
+});
+
+Deno.test("model order: quality tries Flash first and keeps Flash-Lite as a net", () => {
+  const all = ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"];
+  assertEquals(modelOrder(all, "quality"), ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]);
+  assertEquals(modelOrder(all, "fast")[0], "gemini-3.5-flash-lite");
 });

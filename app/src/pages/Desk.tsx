@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Account, DeskEvent } from "../types";
 import { go, useDesk } from "../store";
 import { PLAY_BY_KEY, PLAYS } from "../../../supabase/functions/_shared/plays.ts";
-import { ATS, PRODUCT, SIGNAL } from "../data/taxonomy";
+import { ATS, PRODUCT, namesOwnProduct, signalMeta } from "../data/taxonomy";
 import { ago, dateTime, n } from "../lib/format";
 import { Posting } from "../components/Posting";
 import { PlayPanel } from "../components/PlayPanel";
@@ -110,8 +110,9 @@ export function Desk({ selected }: { selected: number | null }) {
 }
 
 function QueueRow({ a, selected }: { a: Account; selected: boolean }) {
-  const { playFor, signalsFor } = useDesk();
+  const { playFor, signalsFor, desk } = useDesk();
   const p = playFor(a.id);
+  const rv = p ? desk.reviews?.[p.id] : undefined;
   const s = signalsFor(a.id)[0];
   const q = s?.evidence[0]?.quote;
   const control = a.holdout && a.crmStatus !== "customer";
@@ -128,12 +129,13 @@ function QueueRow({ a, selected }: { a: Account; selected: boolean }) {
           {control && <span className="pill control"><IconLock />Control</span>}
         </div>
         <div className="meta">
-          <span>{p ? PLAY_BY_KEY[p.playKey]?.name : SIGNAL[a.topSignal]?.short}</span>
+          <span>{p ? PLAY_BY_KEY[p.playKey]?.name : a.crmStatus === "customer" ? "Expansion signal" : signalMeta(a.topSignal)?.short}</span>
           <span aria-hidden="true">/</span>
           <span>{s ? `posted ${ago(s.postedAt)}` : ""}</span>
         </div>
         {q && <div className="quote">“{q}”</div>}
       </div>
+      {p?.status === "draft" && rv?.decision && <span className="status" title="Buyer review panel: how likely three simulated buyers are to reply, out of 5">panel {rv.mean.toFixed(1)}</span>}
       {p && p.status !== "draft" && p.status !== "held_out" && <span className="status">{p.status === "approved" ? "Approved" : p.status === "sent" ? "Sent" : "Dismissed"}</span>}
     </button>
   );
@@ -155,6 +157,9 @@ function Dossier({ account: a, signals, events }: { account: Account; signals: R
     return e.type === "signal_up" ? ("up" as const) : ("down" as const);
   };
   const types = Object.entries(a.breakdown).sort((x, y) => (y[1] ?? 0) - (x[1] ?? 0));
+  const aliases = desk.seller?.productAliases;
+  const own = signals.some((s) => namesOwnProduct(s.tools, aliases));
+  const crmSource = desk.crmSource?.[a.id];
 
   return (
     <div className="dossier-inner">
@@ -176,13 +181,18 @@ function Dossier({ account: a, signals, events }: { account: Account; signals: R
         </div>
       </div>
       {(play?.whyNow || signals[0]) && <p className="why">{play?.whyNow || signals[0].summary}</p>}
+      {a.crmStatus === "customer" && (
+        <div className="callout customer">
+          <b>Existing customer, not a cold prospect.</b> {crmSource ?? "Marked as a customer in the CRM."} This account is out of the outbound queue and out of the experiment; it goes to the account owner as an expansion signal.
+        </div>
+      )}
 
       <div className="meter" aria-label="How the score is built">
-        <MeterRow label="Intent" value={a.intent} max={60} note={types.map(([t, v]) => `${SIGNAL[t as keyof typeof SIGNAL]?.short} ${v}`).join(", ")} />
+        <MeterRow label="Intent" value={a.intent} max={60} note={types.map(([t, v]) => `${signalMeta(t as never, own)?.short} ${v}`).join(", ")} />
         <MeterRow label="Fit" value={a.fit} max={25} note={`${a.salesRoles} open sales roles: a bigger, growing sales team means more comp complexity`} />
         <MeterRow label="Timing" value={a.timing} max={15} note={a.freshest ? `Newest relevant post ${ago(a.freshest)}` : ""} />
         <div className="actions" style={{ marginTop: 4 }}>
-          {types.map(([t, v]) => <SignalPill key={t} type={t as never} points={v} />)}
+          {types.map(([t, v]) => <SignalPill key={t} type={t as never} points={v} own={own} />)}
         </div>
       </div>
 
@@ -197,7 +207,7 @@ function Dossier({ account: a, signals, events }: { account: Account; signals: R
 
       <div className="section">
         <h2>Recommended play</h2>
-        <p className="sub">Chosen from the play catalog by the strongest signal; the first touch is drafted from the verified lines above and checked before it reaches you.</p>
+        <p className="sub">Chosen from the play catalog by the strongest signal. The first touch is drafted from the verified lines above, checked in code, then read by a panel of simulated buyers and rewritten until they would reply.</p>
         <PlayPanel account={a} play={play} signals={signals} />
       </div>
 

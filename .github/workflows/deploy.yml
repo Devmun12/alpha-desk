@@ -34,6 +34,7 @@ jobs:
         run: npx tsc
       - name: Save a snapshot of the live desk (used if the API is unreachable)
         run: |
+          mkdir -p public
           curl -fsS --retry 3 --max-time 60 "$API/desk" -o public/snapshot.json \
             && node -e "const d=require('./public/snapshot.json'); console.log('accounts', d.accounts.length, 'signals', d.signals.length, 'plays', d.plays.length)" \
             || echo "API unreachable; deploying without a fresh snapshot"

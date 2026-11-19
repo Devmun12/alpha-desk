@@ -36,6 +36,20 @@ export const SENIORITY: Record<string, string> = { ic: "Individual contributor",
 
 export const ATS: Record<string, string> = { greenhouse: "Greenhouse", lever: "Lever", ashby: "Ashby" };
 
+const OWN = { label: "Names your product: likely a customer", short: "Your product in place", family: "comp" as Family };
+
+/** True when a posting names the seller's own product (set in the seller profile). */
+export function namesOwnProduct(tools: { name: string }[] | null | undefined, aliases: string[] | undefined): boolean {
+  if (!aliases?.length) return false;
+  const set = aliases.map((a) => a.toLowerCase());
+  return (tools ?? []).some((t) => set.includes(t.name.toLowerCase()));
+}
+
+/** Label for a signal. "Competitor in place" becomes "Your product in place" when the tool named is the seller's own. */
+export function signalMeta(t: SignalType, own = false) {
+  return own && t === "icm_incumbent" ? OWN : SIGNAL[t];
+}
+
 export function familyOf(t: SignalType): Family {
   return SIGNAL[t]?.family ?? "comp";
 }

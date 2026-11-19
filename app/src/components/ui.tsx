@@ -1,9 +1,9 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import type { SignalType } from "../types";
-import { FAMILY, SIGNAL } from "../data/taxonomy";
+import { FAMILY, signalMeta } from "../data/taxonomy";
 
-export function SignalPill({ type, points }: { type: SignalType; points?: number }) {
-  const meta = SIGNAL[type];
+export function SignalPill({ type, points, own }: { type: SignalType; points?: number; own?: boolean }) {
+  const meta = signalMeta(type, own);
   if (!meta) return null;
   const fam = FAMILY[meta.family];
   return (

@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import type { Signal } from "../types";
 import { excerpt, locate, segments } from "../lib/highlight";
-import { FAMILY, ROLE, SIGNAL, familyOf } from "../data/taxonomy";
+import { FAMILY, ROLE, familyOf, namesOwnProduct, signalMeta } from "../data/taxonomy";
+import { useDesk } from "../store";
 import { ago, date } from "../lib/format";
 import { IconDown, IconExternal, IconUp } from "./icons";
 
@@ -19,6 +20,8 @@ interface Props {
  * evidence highlighted in place and explained in the margin.
  */
 export function Posting({ signal, points = {}, feedback, onFeedback, text }: Props) {
+  const aliases = useDesk().desk.seller?.productAliases;
+  const own = namesOwnProduct(signal.tools, aliases);
   const content = text ?? signal.content ?? "";
   const [full, setFull] = useState(false);
   const spans = useMemo(() => locate(content, signal.evidence), [content, signal.evidence]);
@@ -77,7 +80,7 @@ export function Posting({ signal, points = {}, feedback, onFeedback, text }: Pro
 
         <aside className="margin" aria-label="Why these lines matter">
           {signal.evidence.map((e, i) => {
-            const meta = SIGNAL[e.supports];
+            const meta = signalMeta(e.supports, own);
             return (
               <div className="note" key={i}>
                 <span className="swatch" style={{ ["--c" as string]: FAMILY[familyOf(e.supports)].hl, marginTop: 3 }} />
@@ -98,7 +101,9 @@ export function Posting({ signal, points = {}, feedback, onFeedback, text }: Pro
             <>
               <span>Tools named</span>
               {signal.tools.map((t) => (
-                <span className="pill" key={t.name} title={t.context.replace("_", " ")}>{t.name}</span>
+                namesOwnProduct([t], aliases)
+                  ? <span className="pill customer" key={t.name} title="This is your own product">{t.name}: your product</span>
+                  : <span className="pill" key={t.name} title={t.context.replace("_", " ")}>{t.name}</span>
               ))}
             </>
           ) : (

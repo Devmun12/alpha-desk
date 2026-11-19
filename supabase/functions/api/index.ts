@@ -5,7 +5,7 @@
 //   POST /api/event     record a rep action (approve, send, dismiss, feedback, outcome)
 //   POST /api/analyze   read any job posting live with the same prompt and checks
 // Internal (pg_cron via pg_net, x-pipeline-secret header):
-//   POST /api/ingest | /api/extract | /api/draft
+//   POST /api/ingest | /api/extract      (drafting and the daily brief live in ../agent)
 // Tables stay closed to anon; this function holds the service role.
 import { admin, cors, isInternal, json, withLease } from "../_shared/db.ts";
 import { extractPosting } from "../_shared/extract.ts";
@@ -15,7 +15,6 @@ import { prefilter } from "../_shared/prefilter.ts";
 import { choosePlay, PLAY_BY_KEY } from "../_shared/plays.ts";
 import { ingest } from "../_shared/jobs/ingest.ts";
 import { extract } from "../_shared/jobs/extract.ts";
-import { draft } from "../_shared/jobs/draft.ts";
 
 const ANALYZE_PER_HOUR = 40;
 
@@ -26,11 +25,11 @@ Deno.serve(async (req) => {
   const db = admin();
 
   try {
-    if (["/ingest", "/extract", "/draft"].includes(route)) {
+    if (["/ingest", "/extract"].includes(route)) {
       if (req.method !== "POST" || !(await isInternal(req, db))) return json({ error: "unauthorized" }, 401);
       const body = await req.json().catch(() => ({}));
       const job = route.slice(1);
-      const run = () => (job === "ingest" ? ingest(db, body) : job === "extract" ? extract(db, body) : draft(db, body));
+      const run = () => (job === "ingest" ? ingest(db, body) : extract(db, body));
       // Targeted runs (explicit ids) skip the lease; scheduled runs are single-flight.
       if (body.accountIds?.length || body.postIds?.length) return await run();
       return await withLease(db, job, 170, run);

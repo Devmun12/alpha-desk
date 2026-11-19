@@ -4,13 +4,14 @@ import { ago, compact, dateTime, duration, n, pct } from "../lib/format";
 import { ATS } from "../data/taxonomy";
 import { Seg, Stat } from "../components/ui";
 
-const KIND: Record<string, string> = { ingest: "Read job boards", extract: "AI reads postings", draft: "Draft plays", analyze: "Live read", notify: "Notify" };
+const KIND: Record<string, string> = { ingest: "Read job boards", extract: "AI reads postings", draft: "Draft and review", analyze: "Live read", notify: "Notify", brief: "Daily brief" };
 
 function summary(kind: string, st: Record<string, unknown>): string {
   const g = (k: string) => Number(st[k] ?? 0);
   if (kind === "ingest") return `${n(g("accounts"))} boards, ${n(g("postings"))} postings, ${n(g("newCandidates"))} new for the AI`;
   if (kind === "extract") return `${n(g("read"))} read, ${n(g("relevant"))} relevant, ${n(g("droppedQuotes"))} quotes dropped`;
-  if (kind === "draft") return `${n(g("drafted"))} drafted, ${n(g("heldOut"))} held out, ${n(g("checksFailed"))} flagged`;
+  if (kind === "draft") return `${n(g("drafted"))} drafted, ${n(g("reviewed"))} read by the panel (mean ${g("panelMean") || "–"}), ${n(g("revised"))} rewritten, ${n(g("heldOut"))} held out`;
+  if (kind === "brief") return `${n(g("items"))} items, ranked by ${st.source === "agent" ? "the model, checked by rules" : "rules"}`;
   if (kind === "analyze") return st.relevant ? "relevant" : "not relevant";
   return "";
 }
@@ -31,7 +32,7 @@ export function Pipeline() {
     <div className="page-inner">
       <div className="page-head">
         <h1>Pipeline</h1>
-        <p className="lede">Five steps on Supabase. The three scheduled jobs (read boards, AI reads, draft plays) are small edge functions that pg_cron calls every minute or two; each does one bounded batch and exits, so it fits the free tier's CPU limit and picks up where the last run stopped.</p>
+        <p className="lede">Five steps on Supabase, then a daily brief. The scheduled jobs are small edge functions that pg_cron calls; each does one bounded batch and exits, so it fits the free tier's limits and picks up where the last run stopped. Drafting is paced to a few accounts every ten minutes to stay inside the free model quota.</p>
       </div>
 
       <div className="flow" aria-label="Pipeline stages">
@@ -39,7 +40,7 @@ export function Pipeline() {
         <div><span className="step-n">2</span><h3>Screen for free</h3><p>Rules on title and body keep comp, RevOps, deal desk and planning roles and drop pay-transparency boilerplate.</p><span className="tech num">{n(s.candidates)} kept ({pct(s.candidates, s.postings, 1)})</span></div>
         <div><span className="step-n">3</span><h3>AI reads, code verifies</h3><p>Gemini returns schema-bound JSON. Every quote must appear verbatim in the post and match its label, or it is dropped.</p><span className="tech num">{n(s.read)} read, {n(s.relevant)} relevant</span></div>
         <div><span className="step-n">4</span><h3>Score in SQL</h3><p>Intent, fit and timing from a weights table anyone can edit. 20% of accounts go to a fixed control group.</p><span className="tech num">{n(desk.accounts.length)} accounts scored</span></div>
-        <div><span className="step-n">5</span><h3>Draft and check</h3><p>One play per account from the catalog. Numbers must trace to approved proof; quotes must be verbatim.</p><span className="tech num">{n(desk.plays.filter((p) => p.status !== "held_out").length)} drafts</span></div>
+        <div><span className="step-n">5</span><h3>Draft, check, review</h3><p>One play per account. Code checks numbers and quotes; three simulated buyers score it; a rewrite ships only if they score it higher.</p><span className="tech num">{n(desk.plays.filter((p) => p.status !== "held_out").length)} drafts</span></div>
       </div>
 
       <div className="section stat-line">
@@ -64,7 +65,7 @@ export function Pipeline() {
             <thead><tr><th>Model</th><th className="r">Calls</th></tr></thead>
             <tbody>{models.map(([m, c]) => <tr key={m}><td>{m}</td><td className="r num">{n(c)}</td></tr>)}</tbody>
           </table>
-          <p className="small muted" style={{ marginTop: 10 }}>Extraction prefers Flash-Lite and drafting prefers Flash; on a quota error the client falls back to the next model the key can call. Prompt versions: {[...new Set(desk.signals.map((x) => x.promptVersion))].join(", ")}, draft.v1.</p>
+          <p className="small muted" style={{ marginTop: 10 }}>Extraction prefers Flash-Lite and drafting prefers Flash; on a quota error the client falls back to the next model the key can call. The buyer panel always runs on Flash-Lite. Prompt versions: {[...new Set([...desk.signals.map((x) => x.promptVersion), ...desk.plays.map((x) => x.promptVersion)])].join(", ")}.</p>
         </div>
       </div>
 
@@ -72,7 +73,7 @@ export function Pipeline() {
         <div className="actions" style={{ marginBottom: 10 }}>
           <h3>Run log</h3>
           <span className="grow" />
-          <Seg label="Stage" value={kind} onChange={setKind} options={[{ value: "all", label: "All" }, { value: "ingest", label: "Boards" }, { value: "extract", label: "AI reads" }, { value: "draft", label: "Drafts" }]} />
+          <Seg label="Stage" value={kind} onChange={setKind} options={[{ value: "all", label: "All" }, { value: "ingest", label: "Boards" }, { value: "extract", label: "AI reads" }, { value: "draft", label: "Drafts" }, { value: "brief", label: "Brief" }]} />
         </div>
         <div style={{ overflowX: "auto" }}>
           <table className="data">

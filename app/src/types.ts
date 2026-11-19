@@ -121,7 +121,7 @@ export interface DeskEvent {
 
 export interface Run {
   id: number;
-  kind: "ingest" | "extract" | "draft" | "notify" | "analyze";
+  kind: "ingest" | "extract" | "draft" | "notify" | "analyze" | "brief";
   status: "running" | "ok" | "partial" | "error";
   startedAt: string;
   finishedAt: string | null;
@@ -141,6 +141,35 @@ export interface Desk {
   coverage: { ats: string; boards: number; postings: number }[];
   weights: { signal_type: SignalType; points: number; label: string; play_key: string; description: string }[];
   roleWeights: { role_family: string; multiplier: number; label: string }[];
+  /** Agent layer (migration 0012). Optional so older snapshots still load. */
+  seller?: { name: string; productAliases: string[] } | null;
+  crmSource?: Record<string, string>;
+  reviews?: Record<string, Review>;
+  brief?: Brief | null;
+}
+
+export interface PanelVerdict { buyer: string; score: number; would_reply: boolean; objection: string }
+export interface ReviewRound { round: number; version: 0 | 1; verdicts: PanelVerdict[]; mean: number; note: string; model: string }
+export interface Review {
+  rounds: ReviewRound[];
+  shipped: 0 | 1;
+  decision: "passed_first_time" | "rewrite_scored_higher" | "rewrite_scored_no_better" | "rewrite_failed_checks" | "rewrite_fixed_checks" | "no_rewrite_offered" | "out_of_time";
+  mean: number;
+  firstMean: number;
+  wouldReply: number;
+  of: number;
+  other?: { version: 0 | 1; subject: string; email: string; mean: number | null };
+}
+
+export interface BriefItem {
+  rank: number; accountId: number; name: string; score: number; tier: string; customer: boolean;
+  action: "review_draft" | "send_approved" | "follow_up" | "confirm_owner"; actionLabel: string;
+  play: string; why: string; quote: string | null; postTitle: string | null; daysSincePost: number | null; panel: string | null; rulePosition: number;
+}
+export interface Brief {
+  date: string; createdAt: string; headline: string; source: "agent" | "rules"; model: string | null; note: string | null;
+  items: BriefItem[];
+  counts: { ready: number; toSend: number; awaitingReply: number; customers: number; freshThisWeek: number; considered: number };
 }
 
 export type Source = "live" | "snapshot";

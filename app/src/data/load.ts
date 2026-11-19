@@ -29,10 +29,10 @@ export async function loadDesk(): Promise<{ desk: Desk; source: Source }> {
     const forced = new URLSearchParams(window.location.search).get("source");
     if (forced !== "snapshot") {
       try {
-        return { desk: await fetchJson<Desk>(`${API_BASE}/desk`, 8000), source: "live" };
+        return { desk: await fetchJson<Desk>(`${API_BASE}/desk`, 20000), source: "live" };
       } catch { /* fall through to the snapshot */ }
     }
-    return { desk: await fetchJson<Desk>("./snapshot.json", 8000), source: "snapshot" };
+    return { desk: await fetchJson<Desk>("./snapshot.json", 20000), source: "snapshot" };
   }
 }
 

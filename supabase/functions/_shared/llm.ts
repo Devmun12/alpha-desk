@@ -9,6 +9,8 @@ export interface LlmResult<T> {
   inputTokens: number;
   outputTokens: number;
   latencyMs: number;
+  /** Models that were tried and failed before this one answered, with the reason. */
+  skipped: string[];
 }
 
 export class LlmError extends Error {
@@ -63,40 +65,74 @@ interface CallOpts {
   temperature?: number;
   maxOutputTokens?: number;
   prefer?: "quality" | "fast";
+  /** Per-attempt ceiling. An edge function dies at 150s, so no single call may wait that long. */
+  timeoutMs?: number;
 }
 
+/**
+ * Order of models to try.
+ *   fast:    Flash-Lite first (no thinking, ~2s), Flash as the fallback.
+ *   quality: the two newest Flash models, then Flash-Lite as a safety net, so a quota or
+ *            outage on one family never stops the job.
+ */
+export function modelOrder(all: string[], prefer: "quality" | "fast" | undefined): string[] {
+  const lite = all.filter((m) => m.includes("lite"));
+  const full = all.filter((m) => !m.includes("lite"));
+  return prefer === "fast" ? [...lite, ...full].slice(0, 4) : [...full.slice(0, 2), ...lite.slice(0, 2)];
+}
+
+// A model that just failed is tried last for the next ten minutes, so one slow or
+// over-quota model does not cost every later call a full timeout.
+const coolUntil = new Map<string, number>();
+
 export async function generateJson<T>(opts: CallOpts): Promise<LlmResult<T>> {
-  let list = await models();
-  if (opts.prefer === "fast") {
-    const lite = list.filter((m) => m.includes("lite"));
-    list = [...lite, ...list.filter((m) => !m.includes("lite"))];
-  }
-  let lastErr: LlmError | null = null;
-  for (const model of list.slice(0, 4)) {
+  const ordered = modelOrder(await models(), opts.prefer);
+  const cooling = (m: string) => (coolUntil.get(m) ?? 0) > Date.now();
+  const list = [...ordered.filter((m) => !cooling(m)), ...ordered.filter(cooling)];
+  // Every failure is kept, so the run log says why a call failed and not only that it did.
+  const trail: string[] = [];
+  let quotaOnly = true;
+  for (const model of list) {
+    if (trail.length) coolUntil.set(list[list.indexOf(model) - 1], Date.now() + 10 * 60_000);
+    // Flash models think before they answer and thinking tokens count against the output
+    // limit. With a small limit the JSON is cut off mid-object, so Flash gets headroom.
+    const maxOutputTokens = model.includes("lite") ? (opts.maxOutputTokens ?? 2048) : Math.max(opts.maxOutputTokens ?? 2048, 8192);
     for (let attempt = 0; attempt < 2; attempt++) {
       const t0 = Date.now();
-      const res = await fetch(`${API}/models/${model}:generateContent`, {
-        method: "POST",
-        headers: { "content-type": "application/json", "x-goog-api-key": key() },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: opts.system }] },
-          contents: [{ role: "user", parts: [{ text: opts.user }] }],
-          generationConfig: {
-            temperature: opts.temperature ?? 0.1,
-            maxOutputTokens: opts.maxOutputTokens ?? 2048,
-            responseMimeType: "application/json",
-            responseSchema: opts.schema,
-          },
-        }),
-      });
+      let res: Response;
+      try {
+        res = await fetch(`${API}/models/${model}:generateContent`, {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-goog-api-key": key() },
+          signal: AbortSignal.timeout(opts.timeoutMs ?? 25_000),
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: opts.system }] },
+            contents: [{ role: "user", parts: [{ text: opts.user }] }],
+            generationConfig: {
+              temperature: opts.temperature ?? 0.1,
+              maxOutputTokens,
+              responseMimeType: "application/json",
+              responseSchema: opts.schema,
+            },
+          }),
+        });
+      } catch (e) {
+        if (e instanceof LlmError) throw e;
+        trail.push(`${model}: ${(e as Error).name === "TimeoutError" ? "no answer in time" : (e as Error).message}`);
+        quotaOnly = false;
+        break;
+      }
       const latencyMs = Date.now() - t0;
       if (res.status === 429 || res.status >= 500) {
-        lastErr = new LlmError(`${model} ${res.status}: ${(await res.text()).slice(0, 300)}`, res.status, true);
+        trail.push(`${model}: ${res.status}`);
+        await res.body?.cancel();
+        if (res.status !== 429) quotaOnly = false;
         if (res.status >= 500 && attempt === 0) { await new Promise((r) => setTimeout(r, 1500)); continue; }
-        break; // quota on this model: move to the next one
+        break; // quota or outage on this model: move to the next one
       }
-      if (res.status === 404) {
-        lastErr = new LlmError(`${model} unavailable for this key`, 404);
+      if (res.status === 404 || res.status === 400) {
+        trail.push(`${model}: ${res.status} ${(await res.text()).replace(/\s+/g, " ").slice(0, 120)}`);
+        quotaOnly = false;
         break;
       }
       if (!res.ok) throw new LlmError(`${model} ${res.status}: ${(await res.text()).slice(0, 400)}`, res.status);
@@ -113,11 +149,14 @@ export async function generateJson<T>(opts: CallOpts): Promise<LlmResult<T>> {
           inputTokens: body.usageMetadata?.promptTokenCount ?? 0,
           outputTokens: (body.usageMetadata?.candidatesTokenCount ?? 0) + (body.usageMetadata?.thoughtsTokenCount ?? 0),
           latencyMs,
+          skipped: trail,
         };
       } catch {
-        lastErr = new LlmError(`${model} returned non-JSON (finish: ${body.candidates?.[0]?.finishReason})`, 502, true);
+        trail.push(`${model}: cut-off JSON (finish ${body.candidates?.[0]?.finishReason}, ${body.usageMetadata?.thoughtsTokenCount ?? 0} thinking tokens)`);
+        quotaOnly = false;
+        break; // the same request would fail the same way: try the next model
       }
     }
   }
-  throw lastErr ?? new LlmError("no model succeeded");
+  throw new LlmError(trail.join("; ").slice(0, 500) || "no model available", quotaOnly && trail.length > 0 ? 429 : 502, true);
 }

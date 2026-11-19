@@ -345,3 +345,45 @@ table.data tr:last-child td { border-bottom: 0; }
 .back { display: none; }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* ---- Agent layer: daily brief, buyer review panel, customer callout ---- */
+.callout { margin-top: var(--s4); padding: var(--s3) var(--s4); border-radius: var(--r-md); font-size: 13.5px; line-height: 1.5; max-width: 72ch; }
+.callout.customer { background: #eef6ff; border: 1px solid #cfe1fb; color: #1b3f7a; }
+
+.brief-headline { font-size: 34px; line-height: 1.12; max-width: 24ch; }
+.brief-list { list-style: none; margin: var(--s5) 0 0; padding: 0; display: grid; gap: var(--s3); }
+.brief-item { display: grid; grid-template-columns: 56px 1fr; gap: var(--s4); width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer;
+  background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r-lg); padding: var(--s4) var(--s5); }
+.brief-item:hover { border-color: var(--ink-3); }
+.brief-item:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.brief-item .rank { font-family: var(--display); font-weight: 700; font-size: 44px; line-height: 1; color: var(--ink-4); font-variation-settings: "opsz" 60, "wdth" 85; }
+.brief-list li:first-child .rank { color: var(--ink); }
+.brief-item .body { display: grid; gap: 6px; min-width: 0; }
+.brief-item .top { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; }
+.brief-item .name { font-size: 19px; font-weight: 700; }
+.brief-item .score { margin-left: auto; font-weight: 700; color: var(--ink-3); }
+.brief-item .why { font-size: 15px; line-height: 1.45; max-width: 70ch; }
+.brief-item .quote { font-family: var(--source); font-size: 14.5px; line-height: 1.55; color: var(--ink-2); max-width: 74ch; }
+.brief-item .meta { display: flex; flex-wrap: wrap; gap: 4px var(--s4); font-size: 12px; color: var(--ink-3); }
+
+.review { border: 1px solid var(--rule); border-radius: var(--r-md); background: var(--surface-2); padding: var(--s3) var(--s4); display: grid; gap: var(--s3); }
+.review > summary { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; cursor: pointer; list-style: none; font-size: 13.5px; }
+.review > summary::-webkit-details-marker { display: none; }
+.review .round { display: grid; gap: 6px; padding-top: var(--s3); border-top: 1px solid var(--rule); }
+.review .verdicts { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.review .verdicts li { display: grid; grid-template-columns: 190px 44px 1fr; gap: var(--s3); font-size: 13px; line-height: 1.4; align-items: baseline; }
+.review .verdicts .who { font-weight: 650; }
+.review .verdicts .call { font-weight: 700; font-size: 12.5px; color: var(--ink-2); }
+.review .verdicts li.yes .call { color: var(--ok); }
+.review .verdicts li.no .call { color: var(--bad); }
+.review .verdicts .say { color: var(--ink-2); font-family: var(--source); font-size: 13.5px; }
+.review .first summary { cursor: pointer; color: var(--ink-3); }
+.review .first .source-text { white-space: pre-wrap; margin-top: var(--s2); }
+
+@media (max-width: 820px) {
+  .brief-headline { font-size: 26px; }
+  .brief-item { grid-template-columns: 34px 1fr; padding: var(--s4); gap: var(--s3); }
+  .brief-item .rank { font-size: 30px; }
+  .review .verdicts li { grid-template-columns: 1fr; gap: 2px; }
+}
+.brief-item mark.hl { --c: var(--hl-comp); }
