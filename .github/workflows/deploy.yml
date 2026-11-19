@@ -1,0 +1,49 @@
+name: Build and deploy the app
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 */6 * * *"   # refresh the saved snapshot the app falls back to
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    env:
+      API: https://bxtfkbifeirwebfytpax.supabase.co/functions/v1/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+      - name: Type-check
+        run: npx tsc
+      - name: Save a snapshot of the live desk (used if the API is unreachable)
+        run: |
+          curl -fsS --retry 3 --max-time 60 "$API/desk" -o public/snapshot.json \
+            && node -e "const d=require('./public/snapshot.json'); console.log('accounts', d.accounts.length, 'signals', d.signals.length, 'plays', d.plays.length)" \
+            || echo "API unreachable; deploying without a fresh snapshot"
+      - name: Build
+        run: npx vite build
+      - name: Publish to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: app/dist
+          force_orphan: true
+          user_name: alpha-desk-bot
+          user_email: actions@users.noreply.github.com
